@@ -259,15 +259,13 @@ class MySQLProtocol(MultiBufferer):
         import pprint; pprint.pprint(result)
     
     @operation
-    def do_query(self, query):
+    def query(self, query):
+        "A query with no response data"
         with util.DataPacker(self) as p:
             p.write('\x03')
             p.write(query)
-        
-        while True:
-            result = yield self.read_result()
-            if not result['eof']['flags'] & 8:
-                break
+
+        ret = yield self.read_result()
     
     @operation
     def prepare(self, query):
@@ -300,9 +298,10 @@ class MySQLProtocol(MultiBufferer):
         defer.returnValue((rows, more_rows))
 
     @defer.inlineCallbacks
-    def runQuery(self, query):
+    def fetchall(self, query):
         result = yield self.prepare(query)
         types = yield self.execute(result['stmt_id'])
+
         all_rows = []
         while True:
             rows, more_rows = yield self.fetch(result['stmt_id'], 2, types)
@@ -316,7 +315,7 @@ class MySQLProtocol(MultiBufferer):
 class MySQLClientFactory(ClientFactory):
     protocol = MySQLProtocol
 
-    def __init__(self, username, password, database):
+    def __init__(self, username, password, database=None):
         self.username = username
         self.password = password
         self.database = database
