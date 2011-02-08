@@ -1,0 +1,5 @@
+Rudimentary Twisted MySQL Protocol implementation.
+
+With thanks to _habnabit for the intial code and his qbuf library.
+
+

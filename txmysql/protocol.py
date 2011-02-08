@@ -1,8 +1,12 @@
 from twisted.internet import defer
 from twisted.python import log
 from qbuf.twisted_support import MultiBufferer, MODE_STATEFUL
+from twisted.internet.protocol import ClientFactory
 from txmysql import util, error
 import struct
+from hashlib import sha1
+import sys
+import pprint
 
 typemap = {
     0x01: 1,
@@ -14,13 +18,37 @@ typemap = {
     0x09: 3,
 }
 
+def _xor(message1, message2):
+	length = len(message1)
+	result = ''
+	for i in xrange(length):
+		x = (struct.unpack('B', message1[i:i+1])[0] ^ struct.unpack('B', message2[i:i+1])[0])
+		result += struct.pack('B', x)
+	return result
+
+def dump_packet(data):
+	
+	def is_ascii(data):
+		if data.isalnum():
+			return data
+		return '.'
+	print "packet length %d" % len(data)
+	print "method call: %s \npacket dump" % sys._getframe(2).f_code.co_name
+	print "-" * 88
+	dump_data = [data[i:i+16] for i in xrange(len(data)) if i%16 == 0]
+	for d in dump_data:
+		print ' '.join(map(lambda x:"%02X" % ord(x), d)) + \
+				'   ' * (16 - len(d)) + ' ' * 2 + ' '.join(map(lambda x:"%s" % is_ascii(x), d))
+	print "-" * 88
+	print ""
+
 def operation(func):
     func = defer.inlineCallbacks(func)
     def wrap(self, *a, **kw):
         return self._do_operation(func, self, *a, **kw)
     return wrap
 
-class MysqlProtocol(MultiBufferer):
+class MySQLProtocol(MultiBufferer):
     mode = MODE_STATEFUL
     def getInitialState(self):
         return self._read_header, 4
@@ -33,8 +61,9 @@ class MysqlProtocol(MultiBufferer):
             return self._read_header, 4
         return cb, length
 
-    def __init__(self):
+    def __init__(self, username, password, database):
         MultiBufferer.__init__(self)
+        self.username, self.password, self.database = username, password, database
         self.sequence = None
         self.ready_deferred = defer.Deferred()
         self._operations = []
@@ -63,10 +92,13 @@ class MysqlProtocol(MultiBufferer):
 
     @defer.inlineCallbacks
     def read_rows(self, columns):
+        print "WE HAVE COLUMNS"
+        print columns
         ret = []
         while True:
             t = yield self.read_header()
             length = yield t.read_lcb()
+            print "length = %s" % repr(length)
             if length is util._EOF:
                 break
             x = columns
@@ -86,12 +118,16 @@ class MysqlProtocol(MultiBufferer):
 
     @defer.inlineCallbacks
     def read_result(self, is_prepare=False, read_rows=True, data_types=None):
+        print "Got to read_result with read_rows=%i" % read_rows
         t = yield self.read_header()
+        print "Got the header"
         field_count = yield t.read_lcb()
+        print "Got the field count = %s" % str(field_count)
         ret = {}
         if field_count == util._EOF:
             ret = yield self.read_eof(read_header=False)
         elif field_count == 0:
+            print "Field count zero"
             if is_prepare:
                 ret['stmt_id'], ret['columns'], ret['parameters'], ret['warning_count'] = yield t.unpack('<IHHxH')
                 if ret['parameters']:
@@ -126,14 +162,24 @@ class MysqlProtocol(MultiBufferer):
         elif field_count == 0xff:
             errno, sqlstate = yield t.unpack('<Hx5s')
             message = yield t.read_rest()
-            raise error.MysqlError(message, errno, sqlstate)
+            raise error.MySQLError(message, errno, sqlstate)
         else:
             if t:
                 ret['extra'] = yield t.read_lcb()
+            print "About to read fields"
             ret['fields'] = yield self.read_fields()
+            print "Done reading fields, got %s" % ret['fields']
             if read_rows:
+                print "Field count = %i" % field_count
                 ret['rows'] = yield self.read_rows(field_count)
-            ret['eof'] = yield self.read_eof(read_header=False)
+                print "About to read eof"
+                ret['eof'] = yield self.read_eof(read_header=False)
+                print "Done read eof"
+
+        print "***********************************"
+        print ret
+        print "***********************************"
+
         defer.returnValue(ret)
 
     @defer.inlineCallbacks
@@ -164,7 +210,13 @@ class MysqlProtocol(MultiBufferer):
         defer.returnValue(ret)
 
     def connectionMade(self):
-        self.do_handshake().chainDeferred(self.ready_deferred)
+        print "IN CONNECTIONMADE IN MYSQLPROTOCOL"
+        d = self.do_handshake()
+        def done_handshake(data):
+            print "DONE HANDSHAKE!"
+            import pprint; pprint.pprint(data)
+            self.ready_deferred.callback(data)
+        d.addCallback(done_handshake)
     
     def _update_operations(self, _result=None):
         if self._operations:
@@ -196,17 +248,19 @@ class MysqlProtocol(MultiBufferer):
         capabilities ^= capabilities & 32
         capabilities |= 0x30000
         yield t.read(13)
-        scramble_buf += yield t.read(13)
+        scramble_buf += yield t.read(12) # The last byte is a NUL
+        yield t.read(1)
 
-        mysql_user_password = sha1(sha1(self.password).digest()).digest()
-        mysql_user_password = sha1(_xor(token, sha1(scramble_buf+mysql_user_password).digest())).digest()
+        scramble_response = _xor(sha1(scramble_buf+sha1(sha1(self.password).digest()).digest()).digest(), sha1(self.password).digest())
 
         with util.DataPacker(self) as p:
             p.pack('<IIB23x', capabilities, 2**23, language)
             p.write_cstring(self.username)
-            p.write_lcs(mysql_user_password)
+            p.write_lcs(scramble_response)
+            #p.write_cstring(self.database)
 
         result = yield self.read_result()
+        defer.returnValue(result)
     
     @operation
     def select_db(self, database):
@@ -249,8 +303,10 @@ class MysqlProtocol(MultiBufferer):
     def execute(self, stmt_id):
         with util.DataPacker(self) as p:
             p.pack('<BIBIB', 0x17, stmt_id, 1, 1, 1)
-        
         result = yield self.read_result(read_rows=False)
+        print "@"*80
+        print result
+        print "@"*80
         defer.returnValue([d['type'] for d in result['fields']])
     
     @operation
@@ -261,10 +317,27 @@ class MysqlProtocol(MultiBufferer):
         import pprint
         rows = []
         while True:
+            print "ABOUT TO RUN READ_RESULT IN FETCH"
+            print types
             result = yield self.read_result(data_types=types)
             if result.get('is_eof'):
                 more_rows = not result['flags'] & 128
+                print "more_rows=%i" % more_rows
                 break
             rows.append(result)
         defer.returnValue((rows, more_rows))
         
+class MySQLClientFactory(ClientFactory):
+    protocol = MySQLProtocol
+
+    def __init__(self, username, password, database):
+        self.username = username
+        self.password = password
+        self.database = database
+
+    def buildProtocol(self, addr):
+        print "building protocol for %s" % addr
+        p = self.protocol(self.username, self.password, self.database)
+        p.factory = self
+        return p
+
