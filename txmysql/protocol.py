@@ -1,7 +1,7 @@
 from twisted.internet import defer
 from twisted.python import log
 from qbuf.twisted_support import MultiBufferer, MODE_STATEFUL
-from twisted.internet.protocol import ClientFactory
+from twisted.internet.protocol import ClientFactory, ReconnectingClientFactory
 from txmysql import util, error
 import struct
 from hashlib import sha1
@@ -48,6 +48,18 @@ def operation(func):
         return self._do_operation(func, self, *a, **kw)
     return wrap
 
+def timeoutable(func):
+    def wrap(self, *a, **kw):
+        self.busy = 1
+        if self.timeout:
+            self.timeout_dfr = defer.Deferred()
+            reactor.callLater(self.timeout, self.timeout_dfr
+
+        d = func(self, *a, **kw)
+
+        return defer.DeferredList([d, timeout_dfr], fireOnOneErrback=True)
+    return wrap
+
 class MySQLProtocol(MultiBufferer):
     mode = MODE_STATEFUL
     def getInitialState(self):
@@ -61,7 +73,7 @@ class MySQLProtocol(MultiBufferer):
             return self._read_header, 4
         return cb, length
 
-    def __init__(self, username, password, database):
+    def __init__(self, username, password, database, timeout=10):
         MultiBufferer.__init__(self)
         self.username, self.password, self.database = username, password, database
         self.sequence = None
@@ -69,6 +81,8 @@ class MySQLProtocol(MultiBufferer):
         self._operations = []
         self._current_operation = None
         self.ready_deferred.addErrback(log.err)
+        self.busy = False # So that we cannot attempt to run two MySQL queries on the same connection
+        self.timeout = timeout
 
     @defer.inlineCallbacks
     def read_header(self):
@@ -243,15 +257,7 @@ class MySQLProtocol(MultiBufferer):
         defer.returnValue(result)
     
     @operation
-    def select_db(self, database):
-        with util.DataPacker(self) as p:
-            p.write('\x02')
-            p.write(database)
-        
-        result = yield self.read_result()
-    
-    @operation
-    def ping(self):
+    def _ping(self):
         with util.DataPacker(self) as p:
             p.write('\x0e')
         
@@ -259,16 +265,7 @@ class MySQLProtocol(MultiBufferer):
         import pprint; pprint.pprint(result)
     
     @operation
-    def query(self, query):
-        "A query with no response data"
-        with util.DataPacker(self) as p:
-            p.write('\x03')
-            p.write(query)
-
-        ret = yield self.read_result()
-    
-    @operation
-    def prepare(self, query):
+    def _prepare(self, query):
         with util.DataPacker(self) as p:
             p.write('\x16')
             p.write(query)
@@ -277,14 +274,14 @@ class MySQLProtocol(MultiBufferer):
         defer.returnValue(result)
     
     @operation
-    def execute(self, stmt_id):
+    def _execute(self, stmt_id):
         with util.DataPacker(self) as p:
             p.pack('<BIBIB', 0x17, stmt_id, 1, 1, 1)
         result = yield self.read_result(read_rows=False)
         defer.returnValue([d['type'] for d in result['fields']])
     
     @operation
-    def fetch(self, stmt_id, rows, types):
+    def _fetch(self, stmt_id, rows, types):
         with util.DataPacker(self) as p:
             p.pack('<BII', 0x1c, stmt_id, rows)
         
@@ -297,22 +294,50 @@ class MySQLProtocol(MultiBufferer):
             rows.append(result)
         defer.returnValue((rows, more_rows))
 
+
+
+    @timeoutable
+    @operation
+    def select_db(self, database):
+        with util.DataPacker(self) as p:
+            p.write('\x02')
+            p.write(database)
+        
+        result = yield self.read_result()
+
+    
+    @timeoutable
+    @operation
+    def query(self, query):
+        "A query with no response data"
+        with util.DataPacker(self) as p:
+            p.write('\x03')
+            p.write(query)
+
+        ret = yield self.read_result()
+
+    @timeoutable
     @defer.inlineCallbacks
     def fetchall(self, query):
-        result = yield self.prepare(query)
-        types = yield self.execute(result['stmt_id'])
+        result = yield self._prepare(query)
+        types = yield self._execute(result['stmt_id'])
 
         all_rows = []
         while True:
-            rows, more_rows = yield self.fetch(result['stmt_id'], 2, types)
+            rows, more_rows = yield self._fetch(result['stmt_id'], 2, types)
             for row in rows:
                 all_rows.append(row['cols'])
             if not more_rows:
                 break
+
+        if timeout:
+            if not timeout_dfr.called:
+                timeout_dfr.cacel()
+
         defer.returnValue(all_rows)
 
         
-class MySQLClientFactory(ClientFactory):
+class MySQLClientFactory(ReconnectingClientFactory):
     protocol = MySQLProtocol
 
     def __init__(self, username, password, database=None):
