@@ -39,8 +39,27 @@ Expected output:
 world', 6], [8, 'Hello world', 7], [9, 'Hello world', 8], [10, 'Hello world',
 9]]
 
+SHAMELESS PLUG: 
+
+txMySQL will be used in production by Hybrid Web Cluster, which is an
+n-redundant web cluster with no single point of failure, which uses ZFS
+replication to eliminate shared storage in loosely coupled, geographically
+distributed web hosting environments. Entire data centres can fail and
+everything carries on running, with data loss and downtime measured in
+seconds, not hours or days, and stress caused by hardware or network
+connectivity failures a thing of the past.
+
+It runs on dedicated hardware and/or cloud infrastructure, enabling hybrid
+setups where you use dedicated hardware for performance and cloud
+infrastructure for ease-of-provisioning, all within the same cluster.
+
+Check it out at http://www.hybrid-cluster.com/.  If you are involved with
+hosting websites or know anyone who is, please spread the word :-)
+
+If you just want web hosting for your own site, we offer rock solid hosting
+based on the aforementioned technology at http://www.hybrid-sites.com/.
+
 QUESTIONS?
 
 Email luke [at] hybrid-logic [dot] co [dot] uk
-
 
