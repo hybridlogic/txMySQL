@@ -220,6 +220,7 @@ class MySQLProtocol(MultiBufferer):
 
     @operation
     def do_handshake(self):
+        self.resetTimeout()
         t = yield self.read_header()
         protocol_version, = yield t.unpack('<B')
         server_version = yield t.read_cstring()
@@ -282,7 +283,6 @@ class MySQLProtocol(MultiBufferer):
         defer.returnValue((rows, more_rows))
 
 
-    @timeoutable
     @operation
     def select_db(self, database):
         with util.DataPacker(self) as p:
@@ -340,7 +340,7 @@ class MySQLConnection(object):
     """
     Takes the responsibility for the reactor.connectTCP call away from the user.
 
-    Lazily connects to MySQL when a query is required and stays connected only
+    Lazily connects to MySQL when a query is run and stays connected only
     for up to idle_timeout seconds.
 
     When excuting a query, waits until query_timeout expires before giving up
@@ -362,7 +362,7 @@ class MySQLConnection(object):
             connect_timeout=None, query_timeout=None, idle_timeout=None,
             retry_on_timeout=False, temporary_error_strings=[]):
 
-        self.hostname = hostname
+        self.hostname = hostname # TODO: If hostname == 'localhost': use /tmp/mysql.sock
         self.username = username
         self.password = password
         self.database = database
@@ -382,9 +382,10 @@ class MySQLConnection(object):
 
 
     def runQuery(self, query, query_args=None):
-        if 
+        pass
         
 
     def runOperation(self, query, query_args=None):
+        pass
 
 
