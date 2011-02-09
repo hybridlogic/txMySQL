@@ -325,11 +325,10 @@ class MySQLProtocol(MultiBufferer):
 class MySQLClientFactory(ReconnectingClientFactory):
     protocol = MySQLProtocol
 
-    def __init__(self, username, password, database=None, timeout=None):
+    def __init__(self, username, password, database=None):
         self.username = username
         self.password = password
         self.database = database
-        self.timeout = timeout # A connection *and* query timeout
 
     def buildProtocol(self, addr):
         p = self.protocol(self.username, self.password, self.database)
@@ -342,23 +341,50 @@ class MySQLConnection(object):
     Takes the responsibility for the reactor.connectTCP call away from the user.
 
     Lazily connects to MySQL when a query is required and stays connected only
-    for up to timeout seconds.
+    for up to idle_timeout seconds.
 
-    If a MySQL connection reports an error, reconnect and try the query again.
+    When excuting a query, waits until query_timeout expires before giving up
+    and reconnecting (assuming this MySQL connection has "gone dead"). If 
+    retry_on_timeout == True, attempts the query again once reconnected.
 
-    Handles retrying queries in case of various connection errors or MySQL error
-    responses.
+    Also accepts a list of error strings from MySQL which should be considered
+    temporary local failures which should trigger a reconnect-and-retry rather
+    than throwing the failure up to the user. These may be application-specific.
+
+    Note that MySQLProtocol itself serialises database access, so if you try
+    to execute multiple queries in parallel, you will have to wait for one to
+    finish before the next one starts. A ConnectionPool inspired by 
+    http://hg.rpath.com/rmake/file/0f76170d71b7/rmake/lib/dbpool.py is coming
+    soon to solve this problem (thanks gxti).
     """
 
-    def __init__(self, hostname, username, password, database=None, timeout=None):
-        self.hostname, self.username, self.password, self.database, self.timeout = \
-                hostname, username, password, database, timeout
+    def __init__(self, hostname, username, password, database=None,
+            connect_timeout=None, query_timeout=None, idle_timeout=None,
+            retry_on_timeout=False, temporary_error_strings=[]):
+
+        self.hostname = hostname
+        self.username = username
+        self.password = password
+        self.database = database
+        self.connect_timeout = connect_timeout
+        self.query_timeout = query_timeout
+        self.idle_timeout = idle_timeout
+        self.retry_on_timeout = retry_on_timeout
+        self.temporary_error_strings = temporary_error_strings
 
         self.connected = False
+        self.mysql_connection = None # Will become an instance of MySQLClientFactory
+                                     # which itself will have a .client attribute which
+                                     # corresponds to the current "live" client
 
-    def query(self, query, query_args=None):
+    def _connect(self):
+        assert not self.connected
+
+
+    def runQuery(self, query, query_args=None):
+        if 
         
 
-    def fetchall(self, query, query_args=None):
+    def runOperation(self, query, query_args=None):
 
 
