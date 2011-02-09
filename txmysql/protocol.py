@@ -48,18 +48,6 @@ def operation(func):
         return self._do_operation(func, self, *a, **kw)
     return wrap
 
-def timeoutable(func):
-    def wrap(self, *a, **kw):
-        self.busy = 1
-        if self.timeout:
-            self.timeout_dfr = defer.Deferred()
-            reactor.callLater(self.timeout, self.timeout_dfr
-
-        d = func(self, *a, **kw)
-
-        return defer.DeferredList([d, timeout_dfr], fireOnOneErrback=True)
-    return wrap
-
 class MySQLProtocol(MultiBufferer):
     mode = MODE_STATEFUL
     def getInitialState(self):
@@ -81,7 +69,6 @@ class MySQLProtocol(MultiBufferer):
         self._operations = []
         self._current_operation = None
         self.ready_deferred.addErrback(log.err)
-        self.busy = False # So that we cannot attempt to run two MySQL queries on the same connection
         self.timeout = timeout
 
     @defer.inlineCallbacks
@@ -295,7 +282,6 @@ class MySQLProtocol(MultiBufferer):
         defer.returnValue((rows, more_rows))
 
 
-
     @timeoutable
     @operation
     def select_db(self, database):
@@ -306,17 +292,16 @@ class MySQLProtocol(MultiBufferer):
         result = yield self.read_result()
 
     
-    @timeoutable
     @operation
     def query(self, query):
         "A query with no response data"
+        print "Started _query"
         with util.DataPacker(self) as p:
             p.write('\x03')
             p.write(query)
 
         ret = yield self.read_result()
 
-    @timeoutable
     @defer.inlineCallbacks
     def fetchall(self, query):
         result = yield self._prepare(query)
@@ -340,13 +325,40 @@ class MySQLProtocol(MultiBufferer):
 class MySQLClientFactory(ReconnectingClientFactory):
     protocol = MySQLProtocol
 
-    def __init__(self, username, password, database=None):
+    def __init__(self, username, password, database=None, timeout=None):
         self.username = username
         self.password = password
         self.database = database
+        self.timeout = timeout # A connection *and* query timeout
 
     def buildProtocol(self, addr):
         p = self.protocol(self.username, self.password, self.database)
         p.factory = self
         return p
+
+
+class MySQLConnection(object):
+    """
+    Takes the responsibility for the reactor.connectTCP call away from the user.
+
+    Lazily connects to MySQL when a query is required and stays connected only
+    for up to timeout seconds.
+
+    If a MySQL connection reports an error, reconnect and try the query again.
+
+    Handles retrying queries in case of various connection errors or MySQL error
+    responses.
+    """
+
+    def __init__(self, hostname, username, password, database=None, timeout=None):
+        self.hostname, self.username, self.password, self.database, self.timeout = \
+                hostname, username, password, database, timeout
+
+        self.connected = False
+
+    def query(self, query, query_args=None):
+        
+
+    def fetchall(self, query, query_args=None):
+
 
