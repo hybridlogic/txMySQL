@@ -18,10 +18,8 @@ network.
 
 """
 
-"""
-conn = MySQLConnection(username='root', password=secrets.MYSQL_ROOT_PASS,
+conn = MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, 'foo',
         connect_timeout=5, query_timeout=5, idle_timeout=5, retry_on_timeout=True)
-"""
 
 @defer.inlineCallbacks
 def fuck_with_mysql_server():
@@ -53,21 +51,22 @@ def fuck_with_mysql_server():
             wait = random.randrange(1, 5)
             yield sleep(wait)
 
-"""
-@defer.inlineCallbacks()
+@defer.inlineCallbacks
 def main():
-    fuck_with_mysql_server()
+    #fuck_with_mysql_server()
     while 1:
         # pick a random value which may or may not trigger query timeout
         # remember, the mysql server only stays up for 
         wait = random.randrange(3, 7)
+        print "About to yield on select sleep(%i)" % wait
         result = yield conn.runQuery("select sleep(%i)" % wait)
+        print "============================================================="
+        print "THIS RESULT IS SACRED AND SHOULD ALWAYS BE RETURNED CORRECTLY"
         print result
-"""
+        print "============================================================="
 
-reactor.callLater(0,fuck_with_mysql_server)
+reactor.callLater(0, main)
 
 application = Application("Evil MySQL reconnection tester")
-
 
 
