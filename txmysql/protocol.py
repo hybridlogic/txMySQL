@@ -2,7 +2,7 @@ from twisted.internet import defer, reactor
 from twisted.protocols.policies import TimeoutMixin
 from twisted.python import log
 from qbuf.twisted_support import MultiBufferer, MODE_STATEFUL
-from twisted.internet.protocol import ClientFactory, ReconnectingClientFactory
+from twisted.internet.protocol import ClientFactory, ReconnectingClientFactory, Protocol
 from txmysql import util, error
 import struct
 from hashlib import sha1
@@ -52,6 +52,16 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     mode = MODE_STATEFUL
     def getInitialState(self):
         return self._read_header, 4
+
+    def connectionClosed(self, reason):
+        print "CONNECTIONCLOSED"
+        #MultiBufferer.connectionClosed(self, reason)
+        Protocol.connectionClosed(self, reason)
+    
+    def connectionLost(self, reason):
+        print "CONNECTIONLOST"
+        #MultiBufferer.connectionLost(self, reason)
+        Protocol.connectionLost(self, reason)
     
     def _read_header(self, data):
         length, _ = struct.unpack('<3sB', data)
@@ -69,7 +79,8 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         self._operations = []
         self._current_operation = None
         self.ready_deferred.addErrback(log.err)
-        #self.setTimeout(idle_timeout) TODO: Add this
+        self.factory = None
+        self.setTimeout(idle_timeout)
 
     @defer.inlineCallbacks
     def read_header(self):
@@ -317,110 +328,3 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
                 break
 
         defer.returnValue(all_rows)
-
-class MySQLClientFactory(ReconnectingClientFactory):
-    protocol = MySQLProtocol
-
-    def __init__(self, username, password, database=None, idle_timeout=None):
-        self.username = username
-        self.password = password
-        self.database = database
-        self.client = None
-        self.deferred = defer.Deferred()
-        self.idle_timeout = idle_timeout
-
-    def buildProtocol(self, addr):
-        p = self.protocol(self.username, self.password, self.database,
-                idle_timeout=self.idle_timeout)
-        p.factory = self
-        self.client = p
-        self.deferred.callback(p)
-        self.deferred = defer.Deferred()
-        return p
-
-    # def clientConnectionFailed/Lost
-    def clientConnectionFailed(self, connector, reason):
-        print "GOT CLIENTCONNECTIONFAILED"
-    
-    def clientConnectionFailed(self, connector, reason):
-        print "GOT CLIENTCONNECTIONLOST"
-
-
-class MySQLConnection(object):
-    """
-    Takes the responsibility for the reactor.connectTCP call away from the user.
-
-    Lazily connects to MySQL when a query is run and stays connected only
-    for up to idle_timeout seconds.
-
-    When excuting a query, waits until query_timeout expires before giving up
-    and reconnecting (assuming this MySQL connection has "gone dead"). If 
-    retry_on_timeout == True, attempts the query again once reconnected.
-
-    Also accepts a list of error strings from MySQL which should be considered
-    temporary local failures which should trigger a reconnect-and-retry rather
-    than throwing the failure up to the user. These may be application-specific.
-
-    Note that MySQLProtocol itself serialises database access, so if you try
-    to execute multiple queries in parallel, you will have to wait for one to
-    finish before the next one starts. A ConnectionPool inspired by 
-    http://hg.rpath.com/rmake/file/0f76170d71b7/rmake/lib/dbpool.py is coming
-    soon to solve this problem (thanks gxti).
-    """
-
-    def __init__(self, hostname, username, password, database=None,
-            connect_timeout=None, query_timeout=None, idle_timeout=None,
-            retry_on_timeout=False, temporary_error_strings=[], port=3306):
-
-        self.hostname = hostname
-        self.username = username
-        self.password = password
-        self.database = database
-        self.connect_timeout = connect_timeout
-        self.query_timeout = query_timeout
-        self.idle_timeout = idle_timeout
-        self.retry_on_timeout = retry_on_timeout
-        self.temporary_error_strings = temporary_error_strings
-        self.port = port
-
-        self.state = 'disconnected'
-        self.factory = None # Will become an instance of MySQLClientFactory
-                            # which itself will have a .client attribute which
-                            # corresponds to the current "live" client
-
-    def stateTransition(self, new_state):
-        print "Transition from %s to %s" % (self.state, new_state)
-        self.state = new_state
-
-    @defer.inlineCallbacks
-    def _begin(self):
-        print "@"*80
-        print "_begin was called when we were in state %s" % self.state
-        print "@"*80
-        if self.state == 'disconnected':
-            self.stateTransition('connecting')
-            self.factory = MySQLClientFactory(self.username, self.password,
-                    self.database, idle_timeout=self.idle_timeout)
-            # TODO: Use UNIX socket if string is "localhost"
-            reactor.connectTCP(self.hostname, self.port, self.factory)
-            client = yield self.factory.deferred
-            protocol = yield self.factory.client.ready_deferred
-            self.stateTransition('connected')
-
-    def _end(self):
-        pass
-
-    @defer.inlineCallbacks
-    def runQuery(self, query):
-        print "Start at the beginning"
-        yield self._begin()
-        result = yield self.factory.client.fetchall(query)
-        yield self._end()
-        defer.returnValue(result)
-
-    @defer.inlineCallbacks
-    def runOperation(self, query):
-        yield self._begin()
-        yield self.mysql_connection.client.fetchall(query)
-        yield self._end()
-

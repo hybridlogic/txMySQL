@@ -1,4 +1,4 @@
-from txmysql.protocol import MySQLConnection, error
+from txmysql.client import MySQLConnection, error
 from twisted.internet import reactor, defer
 import secrets
 from twisted.application.service import Application
