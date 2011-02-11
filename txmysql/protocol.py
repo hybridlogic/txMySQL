@@ -61,6 +61,12 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     def connectionLost(self, reason):
         print "CONNECTIONLOST"
         #MultiBufferer.connectionLost(self, reason)
+        # XXX When we call MultiBufferer.connectionLost, we get
+        # unhandled errors (something isn't adding an Errback
+        # to the deferred which eventually gets GC'd, but I'm
+        # not *too* worried because it *does* get GC'd).
+        # Do check that the things which yield on read() on
+        # the multibufferer get correctly GC'd though.
         Protocol.connectionLost(self, reason)
     
     def _read_header(self, data):
@@ -80,7 +86,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         self._current_operation = None
         self.ready_deferred.addErrback(log.err)
         self.factory = None
-        self.setTimeout(idle_timeout)
+        #self.setTimeout(idle_timeout)
 
     @defer.inlineCallbacks
     def read_header(self):
@@ -209,6 +215,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         d = self.do_handshake()
         def done_handshake(data):
             self.ready_deferred.callback(data)
+            self.ready_deferred = defer.Deferred()
         d.addCallback(done_handshake)
     
     def _update_operations(self, _result=None):

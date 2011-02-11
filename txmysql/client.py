@@ -2,6 +2,7 @@ from twisted.internet.protocol import ClientFactory, ReconnectingClientFactory
 from twisted.internet import reactor, defer
 from protocol import MySQLProtocol # One instance of this per actual connection to MySQL
 from txmysql import util, error
+from twisted.python.failure import Failure
 
 def operation(func):
     """
@@ -12,7 +13,7 @@ def operation(func):
         return self._do_operation(func, self, *a, **kw)
     return wrap
 
-class MySQLConnection(ClientFactory):
+class MySQLConnection(ReconnectingClientFactory):
     """
     Takes the responsibility for the reactor.connectTCP call away from the user.
 
@@ -24,7 +25,7 @@ class MySQLConnection(ClientFactory):
 
     When excuting a query, waits until query_timeout expires before giving up
     and reconnecting (assuming this MySQL connection has "gone dead"). If 
-    retry_on_timeout == True, attempts the query again once reconnected.
+    retry_on_error == True, attempts the query again once reconnected.
 
     Also accepts a list of error strings from MySQL which should be considered
     temporary local failures which should trigger a reconnect-and-retry rather
@@ -41,7 +42,7 @@ class MySQLConnection(ClientFactory):
 
     def __init__(self, hostname, username, password, database=None,
             connect_timeout=None, query_timeout=None, idle_timeout=None,
-            retry_on_timeout=False, temporary_error_strings=[], port=3306):
+            retry_on_error=False, temporary_error_strings=[], port=3306):
 
         self.hostname = hostname
         self.username = username
@@ -50,35 +51,85 @@ class MySQLConnection(ClientFactory):
         self.connect_timeout = connect_timeout
         self.query_timeout = query_timeout
         self.idle_timeout = idle_timeout
-        self.retry_on_timeout = retry_on_timeout
+        self.retry_on_error = retry_on_error
         self.temporary_error_strings = temporary_error_strings
         self.port = port
         self._operations = []
-        self._current_operation = None
+        self._current_operation = None # In case we want to retry the query
+        self._current_operation_dfr = None
         self.deferred = defer.Deferred() # This gets called when we have a new
                                          # client which just got connected
 
         self.state = 'disconnected'
         self.client = None # Will become an instance of MySQLProtocol
                            # precisely when we have a live connection
+        self._last_user_dfr = None
 
-    def stateTransition(self, new_state):
+    def stateTransition(self, _ign=None, state='disconnected', reason=None):
+        new_state = state
+        if new_state == self.state:
+            # Not a transition, heh
+            return
+
         print "Transition from %s to %s" % (self.state, new_state)
+        
+        # connected => not connected
+        if self.state == 'connected' and new_state != 'connected':
+            print "In branch 1"
+            # We have just lost a connection, if we're in the middle of
+            # something, send an errback, unless we're going to retry 
+            # on reconnect, in which case do nothing
+            if not self.retry_on_error and self._current_operation:
+                self._current_operation_dfr.errback(reason)
+
+        # not connected => connected
+        if self.state != 'connected' and new_state == 'connected':
+            print "In branch 2"
+            # We have just made a new connection, if we were in the middle of
+            # something when we got disconnected and we want to retry it, retry
+            # it now
+            if self.retry_on_error and self._current_operation:
+                _, f, a, kw = self._current_operation
+                # user_dfr is the actual deferred which we need to send the
+                # result back to the user on
+                d = f(*a, **kw)
+                print "About to run %s with %s %s" % (f, a, kw)
+                def done_query(data):
+                    print "Just come back from recovered query with data %s" % data
+                    print "And here are the operations..."
+                    print self._operations
+                    print self._current_operation
+                    print self._current_operation_dfr
+                    print self._last_user_dfr
+                    print "?"*80
+                    user_dfr = self._current_operation[0]
+                    user_dfr.callback(data)
+                    self._current_operation = None
+                    self._current_operation_dfr = None
+                    self._update_operations() # Continue with any further pending queries
+                d.addCallback(done_query)
+
+            else:
+                # Abort the current execution and run the next one, if any
+                self._current_operation = None
+                self._current_operation_dfr = None
+                self._update_operations()
+        
         self.state = new_state
 
     @defer.inlineCallbacks
     def _begin(self):
-        print "@"*80
-        print "_begin was called when we were in state %s" % self.state
-        print "@"*80
         if self.state == 'disconnected':
-            self.stateTransition('connecting')
+            self.stateTransition(state='connecting')
             # TODO: Use UNIX socket if string is "localhost"
-            # we are the factory which we pass to the reactor, is that weird?
             reactor.connectTCP(self.hostname, self.port, self)
             yield self.deferred # will set self.client
             yield self.client.ready_deferred
-            self.stateTransition('connected')
+        elif self.state == 'connecting':
+            yield self.deferred
+            yield self.client.ready_deferred
+        elif self.state == 'connected':
+            pass
 
     def _end(self):
         pass
@@ -88,22 +139,35 @@ class MySQLConnection(ClientFactory):
         p = self.protocol(self.username, self.password, self.database,
                 idle_timeout=self.idle_timeout)
         p.factory = self
+        print "*!"*150
         self.client = p
-        self.deferred.callback(p)
+        print self.client.ready_deferred
+        print "*!"*150
+        self.deferred.callback(self.client)
         self.deferred = defer.Deferred()
+        self.client.ready_deferred.addCallback(self.stateTransition, state='connected')
+        self.resetDelay()
         return p
 
     def clientConnectionFailed(self, connector, reason):
         print "GOT CLIENTCONNECTIONFAILED"
+        self.stateTransition(state='connecting', reason=reason)
+        ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
     
-    def clientConnectionFailed(self, connector, reason):
-        print "GOT CLIENTCONNECTIONLOST"
+    def clientConnectionLost(self, connector, reason):
+        print "GOT CLIENTCONNECTIONLOST %s" % reason
+        self.stateTransition(state='connecting', reason=reason)
+        ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
+
+    #def retry(...): CHECK IF WE HAVE PENDING QUERIES AND ONLY RECONNECT IF WE DO
 
     @operation
     def runQuery(self, query): # TODO query_args
-        print "Start at the beginning"
         yield self._begin()
         result = yield self.client.fetchall(query)
+        print "@"*80
+        print result
+        print "@"*80
         yield self._end()
         defer.returnValue(result)
 
@@ -115,22 +179,32 @@ class MySQLConnection(ClientFactory):
 
     # TODO: Put this code in a common base class
     def _update_operations(self, _result=None):
-        print "Hit _update_operation in client.py"
+        """
+        Run the next operation due
+        """
+        print "CURRENT OPERATION / OPERATIONS with client %s" % self.client
+        print self._current_operation
+        print self._operations
         if self._operations:
             d, f, a, kw = self._operations.pop(0)
+            print "BLARGH ABOUT TO CHAIN ONTO %s" % d
             self.sequence = 0
-            self._current_operation = f(*a, **kw)
-            (self._current_operation
+            self._current_operation = d, f, a, kw
+            self._current_operation_dfr = f(*a, **kw)
+            (self._current_operation_dfr
                 .addBoth(self._update_operations)
                 .chainDeferred(d))
         else:
+            self._current_operation_dfr = None
             self._current_operation = None
         return _result
+
     def _do_operation(self, func, *a, **kw):
         print "Hit do_operation in client.py"
         d = defer.Deferred()
         self._operations.append((d, func, a, kw))
-        if self._current_operation is None:
+        if self._current_operation_dfr is None:
             self._update_operations()
+        self._last_user_dfr = d
         return d
 

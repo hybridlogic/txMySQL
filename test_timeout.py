@@ -5,7 +5,9 @@ from twisted.application.service import Application
 import time
 import random
 from HybridUtils import AsyncExecCmds, sleep
+from twisted.python import log
 
+defer.setDebugging(True)
 """
 
 Simulate the worst possible scenario for connectivity to a MySQL server
@@ -19,7 +21,7 @@ network.
 """
 
 conn = MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, 'foo',
-        connect_timeout=5, query_timeout=5, idle_timeout=5, retry_on_timeout=True)
+        connect_timeout=5, query_timeout=5, idle_timeout=5, retry_on_error=True)
 
 @defer.inlineCallbacks
 def fuck_with_mysql_server():
@@ -56,14 +58,25 @@ def main():
     #fuck_with_mysql_server()
     while 1:
         # pick a random value which may or may not trigger query timeout
-        # remember, the mysql server only stays up for 
+        # remember, the mysql server only stays up for a short while
         wait = random.randrange(3, 7)
         print "About to yield on select sleep(%i)" % wait
-        result = yield conn.runQuery("select sleep(%i)" % wait)
-        print "============================================================="
-        print "THIS RESULT IS SACRED AND SHOULD ALWAYS BE RETURNED CORRECTLY"
-        print result
-        print "============================================================="
+        try:
+            d = conn.runQuery("select sleep(%i)" % wait)
+            print "============================================================="
+            print "I have been promised a result on %s" % str(d)
+            print "============================================================="
+            
+            result = yield d
+            print "============================================================="
+            print "THIS RESULT IS SACRED AND SHOULD ALWAYS BE RETURNED CORRECTLY %s" % str(d)
+            print result
+            print "============================================================="
+        except Exception, e:
+            print "AAAAAAAAAAAAAARGH I GOT A FAILURE AS AN EXCEPTION"
+            print e
+            print "AAAAAAAAAAAAAARGH I GOT A FAILURE AS AN EXCEPTION, sleeping..."
+            yield sleep(1)
 
 reactor.callLater(0, main)
 
