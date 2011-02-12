@@ -4,6 +4,8 @@ import secrets
 from twisted.application.service import Application
 import time
 import random
+import shutil
+import pprint
 from HybridUtils import AsyncExecCmds, sleep
 from twisted.python import log
 
@@ -54,24 +56,45 @@ def fuck_with_mysql_server():
             yield sleep(wait)
 
 @defer.inlineCallbacks
+def render_status():
+    while 1:
+        fp = open("status.tmp", "w")
+        yield sleep(0.1)
+        fp.write("Operations:\n\n")
+        fp.write(pprint.pformat(conn._pending_operations) + "\n\n")
+        fp.write("Current operation;\n\n")
+        fp.write(pprint.pformat(conn._current_operation) + "\n\n")
+        fp.write("Current operation deferred:\n\n")
+        fp.write(pprint.pformat(conn._current_operation_dfr) + "\n\n")
+        fp.write("Current user deferred:\n\n")
+        fp.write(pprint.pformat(conn._current_user_dfr) + "\n\n")
+        fp.close()
+        shutil.move("status.tmp", "status.txt")
+
+@defer.inlineCallbacks
 def main():
-    #fuck_with_mysql_server()
+    fuck_with_mysql_server()
+    render_status()
     while 1:
         # pick a random value which may or may not trigger query timeout
         # remember, the mysql server only stays up for a short while
         wait = random.randrange(3, 7)
         print "About to yield on select sleep(%i)" % wait
         try:
-            d = conn.runQuery("select sleep(%i)" % wait)
+            d1 = conn.runQuery("select sleep(%i)" % wait)
+            d2 = conn.runQuery("select sleep(%i)" % (wait + 1))
+            d3 = conn.runQuery("select sleep(%i)" % (wait + 2))
             print "============================================================="
-            print "I have been promised a result on %s" % str(d)
+            print "I have been promised a result on %s" % str([d1,d2,d3])
             print "============================================================="
-            
+            d = defer.DeferredList([d1, d2, d3])
             result = yield d
             print "============================================================="
             print "THIS RESULT IS SACRED AND SHOULD ALWAYS BE RETURNED CORRECTLY %s" % str(d)
             print result
             print "============================================================="
+            print "about to go under..."
+            yield sleep(random.randrange(3, 7))
         except Exception, e:
             print "AAAAAAAAAAAAAARGH I GOT A FAILURE AS AN EXCEPTION"
             print e
