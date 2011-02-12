@@ -52,6 +52,10 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     mode = MODE_STATEFUL
     def getInitialState(self):
         return self._read_header, 4
+    
+    def timeoutConnection(self):
+        print "Timing out connection"
+        TimeoutMixin.timeoutConnection(self)
 
     def connectionClosed(self, reason):
         print "CONNECTIONCLOSED"
@@ -77,7 +81,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             return self._read_header, 4
         return cb, length
 
-    def __init__(self, username, password, database, idle_timeout=120):
+    def __init__(self, username, password, database, idle_timeout=None):
         MultiBufferer.__init__(self)
         self.username, self.password, self.database = username, password, database
         self.sequence = None

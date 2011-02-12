@@ -23,12 +23,12 @@ network.
 """
 
 conn = MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, 'foo',
-        connect_timeout=5, query_timeout=5, idle_timeout=5, retry_on_error=True)
+        connect_timeout=5, query_timeout=5, idle_timeout=10, retry_on_error=True)
 
 @defer.inlineCallbacks
 def fuck_with_mysql_server():
     print "Stopping MySQL"
-    AsyncExecCmds(['pkill -9 mysqld; stop mysql'], cmd_prefix='sudo ').getDeferred()
+    yield AsyncExecCmds(['pkill -9 mysqld; sudo stop mysql'], cmd_prefix='sudo ').getDeferred()
     # The pkill -9 mysqld causes "Lost connection to MySQL server during query"
     # or "MySQL server has gone away" if you try to query on a connection which has died
     while 1:
@@ -37,10 +37,10 @@ def fuck_with_mysql_server():
             # successfully return a SELECT
             print "Starting MySQL"
             yield AsyncExecCmds(['start mysql'], cmd_prefix='sudo ').getDeferred()
-            wait = random.randrange(3, 10)
+            wait = random.randrange(30, 31)
             yield sleep(wait)
             print "Stopping MySQL"
-            yield AsyncExecCmds(['pkill -9 mysqld; stop mysql'], cmd_prefix='sudo ').getDeferred()
+            yield AsyncExecCmds(['pkill -9 mysqld; sudo stop mysql'], cmd_prefix='sudo ').getDeferred()
             wait = random.randrange(1, 5)
             yield sleep(wait)
         else:
@@ -50,7 +50,7 @@ def fuck_with_mysql_server():
             # Lost connection to MySQL server at 'reading initial communication packet', system error: 0
             # ... when the connection finally dies (i.e. when evildaemon.py stops)
             print "Starting evil daemon"
-            yield AsyncExecCmds(['python test/evildaemon.py'], cmd_prefix='sudo ').getDeferred()
+            yield AsyncExecCmds(['stop mysql; sudo python test/evildaemon.py'], cmd_prefix='sudo ').getDeferred()
             print "Evil daemon stopped"
             wait = random.randrange(1, 5)
             yield sleep(wait)
