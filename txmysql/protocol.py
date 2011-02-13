@@ -90,7 +90,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         self._current_operation = None
         self.ready_deferred.addErrback(log.err)
         self.factory = None
-        #self.setTimeout(idle_timeout)
+        self.setTimeout(idle_timeout)
 
     @defer.inlineCallbacks
     def read_header(self):
