@@ -1,4 +1,4 @@
-Rudimentary Twisted MySQL Protocol implementation. Consider this v0.1 alpha.
+Twisted MySQL Protocol implementation. Consider this v0.2
 
 With thanks to _habnabit for the intial code (which did the vast majority of
 the heavy lifting) and his qbuf library.
@@ -7,14 +7,19 @@ PREREQUISITES:
 
     * qbuf (a Python C-extension)
 
+NEW FEATURES:
+    * Connects idly to MySQL and times out if the connection is left
+      idle
+    * Reconnects on errors when there are pending queries (including
+      user-configurable errors with
+      temporary_error_strings=[...] in the constructor) with idle_timeout and
+      connect_timeout constructors.
+    * Now has unit tests
+
 TODO:
 
     * Support escaping arguments with '?' or '%s' style syntax (my preference
       being for the former)
-    * Make it subclass ReconnectingClientFactory and handle reconnection
-      correctly
-
-    * Unit tests
     * DateTime support (see pymysql.converters for how to do this)
     * Iterator protocol for iterating over large results sets, lazily
       loaded as they come back from the server
@@ -27,17 +32,14 @@ TODO:
 
 EXAMPLE USAGE:
 
-Create an empty database called "foo" and set username and password in example.py.
+@inlineCallbacks
+def main():
+    c = yield client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS,
+            idle_timeout=120, connect_timeout=30)
+    yield c.selectDb("foo") # This gets remembered and re-run on reconnect
+    yield c.runOperation("insert into bar set baz='bash'")
+    data = yield c.runQuery("select * from bar")
 
-twistd -noy example.py
-
-Expected output:
-
-[]
-[[1, 'Hello world', 0], [2, 'Hello world', 1], [3, 'Hello world', 2], [4,
-'Hello world', 3], [5, 'Hello world', 4], [6, 'Hello world', 5], [7, 'Hello
-world', 6], [8, 'Hello world', 7], [9, 'Hello world', 8], [10, 'Hello world',
-9]]
 
 SHAMELESS PLUG: 
 
