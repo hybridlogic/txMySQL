@@ -8,12 +8,11 @@ PREREQUISITES:
     * qbuf (a Python C-extension)
 
 NEW FEATURES:
-    * Connects idly to MySQL and times out if the connection is left
-      idle
+    * Connects lazily to MySQL and disconnects if the connection is left
+      idle longer than idle_timeout
     * Reconnects on errors when there are pending queries (including
-      user-configurable errors with
-      temporary_error_strings=[...] in the constructor) with idle_timeout and
-      connect_timeout constructors.
+      user-configurable errors with temporary_error_strings=[...] in the
+      constructor)
     * Now has unit tests
 
 TODO:
@@ -32,11 +31,14 @@ TODO:
 
 EXAMPLE USAGE:
 
-@inlineCallbacks
+from twisted.internet import defer
+from txmysql import client
+
+@defer.inlineCallbacks
 def main():
     c = yield client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS,
             idle_timeout=120, connect_timeout=30)
-    yield c.selectDb("foo") # This gets remembered and re-run on reconnect
+    yield c.selectDb("foo") # This gets remembered and re-run if the connection needs reconnection
     yield c.runOperation("insert into bar set baz='bash'")
     data = yield c.runQuery("select * from bar")
 
