@@ -54,16 +54,16 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         return self._read_header, 4
     
     def timeoutConnection(self):
-        print "Timing out connection"
+        #print "Timing out connection"
         TimeoutMixin.timeoutConnection(self)
 
     def connectionClosed(self, reason):
-        print "CONNECTIONCLOSED"
+        #print "CONNECTIONCLOSED"
         #MultiBufferer.connectionClosed(self, reason)
         Protocol.connectionClosed(self, reason)
     
     def connectionLost(self, reason):
-        print "CONNECTIONLOST"
+        #print "CONNECTIONLOST"
         #MultiBufferer.connectionLost(self, reason)
         # XXX When we call MultiBufferer.connectionLost, we get
         # unhandled errors (something isn't adding an Errback
@@ -318,7 +318,6 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     @operation
     def query(self, query):
         "A query with no response data"
-        print "Started _query"
         with util.DataPacker(self) as p:
             p.write('\x03')
             p.write(query)

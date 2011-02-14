@@ -11,4 +11,4 @@ pyflakes:
 trialtests: export PYTHONPATH:= txmysql:test
 trialtests:
 	mkdir -p _logs_temp
-	trial test/test_*.py
+	trial --rterrors test/test_*.py

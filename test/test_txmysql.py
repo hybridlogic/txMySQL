@@ -20,7 +20,6 @@ class AwesomeProxyTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_010_start_connect_query(self):
-        return
         """
         1. Start MySQL
         2. Connect
@@ -34,7 +33,6 @@ class AwesomeProxyTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_020_stop_connect_query_start(self):
-        return
         """
         1. Connect, before MySQL is started
         2. Start MySQL
@@ -49,7 +47,6 @@ class AwesomeProxyTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_021_stop_connect_query_start_retry_on_error(self):
-        return
         """
         1. Connect, before MySQL is started
         2. Start MySQL
@@ -64,7 +61,6 @@ class AwesomeProxyTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_030_start_idle_timeout(self):
-        return
         """
         Connect, with evildaemon in place of MySQL
         Evildaemon stops in 5 seconds, which is longer than our idle timeout
@@ -82,7 +78,6 @@ class AwesomeProxyTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_040_start_connect_long_query_timeout(self):
-        return
         """
         Connect to the real MySQL, run a long-running query which exceeds the
         idle timeout, check that it times out and returns the appropriate
@@ -100,7 +95,6 @@ class AwesomeProxyTest(unittest.TestCase):
         
     @defer.inlineCallbacks
     def test_050_retry_on_error(self):
-        return
         """
         Start a couple of queries in parallel.
         Both of them should take 10 seconds, but restart the MySQL
@@ -120,6 +114,17 @@ class AwesomeProxyTest(unittest.TestCase):
         self.assertEquals(result, [(True, [[0]]), (True, [[0]])])
 
     @defer.inlineCallbacks
+    def test_055_its_just_one_thing_after_another_with_you(self):
+        """
+        Sanity check that you can do one thing and then another thing.
+        """
+        yield self._start_mysql()
+        conn = yield self._connect_mysql(retry_on_error=True)
+        yield conn.runQuery("select 2")
+        yield conn.runQuery("select 2")
+        conn.disconnect()
+
+    @defer.inlineCallbacks
     def test_060_error_strings_test(self):
         """
         This test causes MySQL to return what we consider a temporary local
@@ -133,15 +138,21 @@ class AwesomeProxyTest(unittest.TestCase):
         This is arguably the most application-specific behaviour in the txMySQL
         client library.
 
-        Note that this 
         """
+        res = yield AsyncExecCmds([
+            """sh -c '
+            cd /var/lib/mysql/foo;
+            chmod 0660 *;
+            chown mysql:mysql *
+            '"""], cmd_prefix="sudo ").getDeferred()
         yield self._start_mysql()
         conn = yield self._connect_mysql(retry_on_error=True,
             temporary_error_strings=[
-                "Can't find file: './foo/testing.frm' (errno: 13)",
+                "Can't find file: './foo/foo.frm' (errno: 13)",
             ])
-        yield conn.runOperation("create database if not exists foo")
         yield conn.selectDb("foo")
+        yield conn.runOperation("create database if not exists foo")
+        yield conn.runOperation("create database if not exists foo")
         yield conn.runOperation("drop table if exists foo")
         yield conn.runOperation("create table foo (id int)")
         yield conn.runOperation("insert into foo set id=1")
@@ -149,26 +160,27 @@ class AwesomeProxyTest(unittest.TestCase):
         self.assertEquals(result, [[1]])
 
         # Now the tricky bit, we have to force MySQL to yield the error message.
-        #res = yield AsyncExecCmds([
-        #    """sh -c '
-        #    cd /var/lib/mysql/foo;
-        #    chmod 0600 *;
-        #    chown root:root *'
-        #    """], cmd_prefix="sudo ").getDeferred()
-        #print res
-        #
-        #yield conn.runOperation("flush tables") # cause the files to get re-opened
-        #d = conn.runQuery("select * from foo") # This will spin until we fix the files, so do that pronto
-        #yield sleep(1)
-        #res = yield AsyncExecCmds([
-        #    """sh -c '
-        #    cd /var/lib/mysql/foo;
-        #    chmod 0660 *;
-        #    chown mysql:mysql *
-        #    '"""], cmd_prefix="sudo ").getDeferred()
-        #print res
-        #result = yield d
-        #self.assertEquals(result, [[1]])
+        res = yield AsyncExecCmds([
+            """sh -c '
+            cd /var/lib/mysql/foo;
+            chmod 0600 *;
+            chown root:root *'
+            """], cmd_prefix="sudo ").getDeferred()
+        print res
+        
+        yield conn.runOperation("flush tables") # cause the files to get re-opened
+        d = conn.runQuery("select * from foo") # This will spin until we fix the files, so do that pronto
+        yield sleep(1)
+        res = yield AsyncExecCmds([
+            """sh -c '
+            cd /var/lib/mysql/foo;
+            chmod 0660 *;
+            chown mysql:mysql *
+            '"""], cmd_prefix="sudo ").getDeferred()
+        print res
+        result = yield d
+        self.assertEquals(result, [[1]])
+        conn.disconnect()
     
     # Utility functions:
 
