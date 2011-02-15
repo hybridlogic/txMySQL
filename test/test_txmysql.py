@@ -19,6 +19,19 @@ import secrets
 class AwesomeProxyTest(unittest.TestCase):
 
     @defer.inlineCallbacks
+    def test_005_test_initial_database_selection(self):
+        """
+        1. Start MySQL
+        2. Connect
+        3. Query - check result
+        """
+        yield self._start_mysql()
+        conn = yield self._connect_mysql()
+        result = yield conn.runQuery("select * from foo")
+        conn.disconnect()
+        self.assertEquals(result, [[1]])
+
+    @defer.inlineCallbacks
     def test_010_start_connect_query(self):
         """
         1. Start MySQL
