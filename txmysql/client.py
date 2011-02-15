@@ -231,16 +231,7 @@ class MySQLConnection(ReconnectingClientFactory):
                         print "    Retrying on error %s, with current operation %s" % (str(reason), str(self._current_operation))
                     # Retry the current operation
                     #print "    In branch 2.1.1"
-                    if self.database:
-                        # Issue a selectDb before retrying the operation
-                        d = self.client.select_db(self.database)
-                        def done_select_db(ign):
-                            self._retryOperation()
-                        def error_selecting_db(failure):
-                            self._current_user_dfr.errback(failure)
-                        d.addCallbacks(done_select_db, error_selecting_db)
-                    else:    
-                        self._retryOperation()
+                    self._retryOperation()
                 else:
                     if DEBUG:
                         print "    Not retrying on error, connection made, nothing to do."

@@ -252,6 +252,8 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         #print hex(capabilities)
         capabilities ^= capabilities & 32
         capabilities |= 0x30000
+        if self.database:
+            capabilities |= 1 << 3 # CLIENT_CONNECT_WITH_DB
         yield t.read(13)
         scramble_buf += yield t.read(12) # The last byte is a NUL
         yield t.read(1)
@@ -262,7 +264,8 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             p.pack('<IIB23x', capabilities, 2**23, language)
             p.write_cstring(self.username)
             p.write_lcs(scramble_response)
-            #p.write_cstring(self.database) TODO: Add this
+            if self.database:
+                p.write_cstring(self.database)
 
         result = yield self.read_result()
         defer.returnValue(result)
