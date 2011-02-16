@@ -325,17 +325,17 @@ class MySQLConnection(ReconnectingClientFactory):
     @defer.inlineCallbacks
     def _doQuery(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "    Attempting an actual query \"%s\"" % _escape(query, args) 
+            print "    Attempting an actual query \"%s\"" % _escape(query, query_args) 
         yield self._begin()
-        result = yield self.client.fetchall(_escape(query, args))
+        result = yield self.client.fetchall(_escape(query, query_args))
         defer.returnValue(result)
 
     @defer.inlineCallbacks
     def _doOperation(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "    Attempting an actual operation \"%s\"" % _escape(query, args)
+            print "    Attempting an actual operation \"%s\"" % _escape(query, query_args)
         yield self._begin()
-        yield self.client.query(query)
+        yield self.client.query(_escape(query, query_args))
 
     @defer.inlineCallbacks
     def _doSelectDb(self, db, ignored):
