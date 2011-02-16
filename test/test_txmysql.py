@@ -16,7 +16,24 @@ from txmysql import client
 from HybridUtils import AsyncExecCmds, sleep
 import secrets
 
-class AwesomeProxyTest(unittest.TestCase):
+class MySQLClientTest(unittest.TestCase):
+
+    def test_003_escaping(self):
+
+        try:
+            client._escape("%s", ())
+            self.fail("that should have raised an exception")
+        except TypeError:
+            pass
+
+        try:
+            client._escape("select * from baz baz baz", (1, 2, 3))
+            self.fail("that should have raised an exception")
+        except TypeError:
+            pass
+
+        result = client._escape("update foo set bar=%s where baz=%s or bash=%s", ("%s", "%%s", 123))
+        self.assertEquals(result, "update foo set bar='%s' where baz='%%s' or bash='123'")
 
     @defer.inlineCallbacks
     def test_005_test_initial_database_selection(self):

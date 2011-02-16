@@ -9,6 +9,25 @@ import time
 
 DEBUG = False
 
+def _escape(query, args=None):
+    if not args:
+        return query
+    escaped_args = []
+    for arg in args:
+        escaped_args.append("'%s'" % str(arg).replace("'", "\\'"))
+    parts = ("[%s]" % str(query)).split('%s') # Add square brackets to
+                                              # guarantee that %s on the end or
+                                              # beginning get a corresponding
+                                              # split
+    if len(escaped_args) + 1 != len(parts):
+        raise TypeError, 'not enough arguments for MySQL format string'
+    # Pad args so that there are an equal number of args and query
+    escaped_args.insert(0, '')
+    if len(parts) != len(escaped_args):
+        raise TypeError, 'INTERNAL ERROR'
+    # Now interpolate and remove the square brackets
+    return (''.join(x + y for x, y in zip(escaped_args, parts)))[1:-1]
+
 class MySQLConnection(ReconnectingClientFactory):
     """
     Takes the responsibility for the reactor.connectTCP call away from the user.
@@ -306,15 +325,15 @@ class MySQLConnection(ReconnectingClientFactory):
     @defer.inlineCallbacks
     def _doQuery(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "    Attempting an actual query \"%s\"" % query
+            print "    Attempting an actual query \"%s\"" % _escape(query, args) 
         yield self._begin()
-        result = yield self.client.fetchall(query)
+        result = yield self.client.fetchall(_escape(query, args))
         defer.returnValue(result)
 
     @defer.inlineCallbacks
     def _doOperation(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "    Attempting an actual operation \"%s\"" % query
+            print "    Attempting an actual operation \"%s\"" % _escape(query, args)
         yield self._begin()
         yield self.client.query(query)
 
