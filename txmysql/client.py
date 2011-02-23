@@ -20,7 +20,7 @@ def _escape(query, args=None):
                                               # beginning get a corresponding
                                               # split
     if len(escaped_args) + 1 != len(parts):
-        raise TypeError, 'not enough arguments for MySQL format string'
+        raise TypeError, 'not enough arguments for MySQL format string %s | %s' % (str(query), str(args))
     # Pad args so that there are an equal number of args and query
     escaped_args.insert(0, '')
     if len(parts) != len(escaped_args):
