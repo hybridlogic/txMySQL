@@ -186,12 +186,12 @@ class MySQLConnection(ReconnectingClientFactory):
                 print "    Setting current operation to %s" % str(self._current_operation)
                 print "    About to run %s(%s, %s) and fire back on %s" % (str(func), str(query), str(query_args), str(user_dfr))
             # Actually execute it, operation_dfr will fire when the database returns
+            self._current_user_dfr = user_dfr
             operation_dfr = func(query, query_args)
             #operation_dfr.addErrback(log.err)
             # Store a reference to the current operation (there's gonna be only
             # one running at a time)
             self._current_operation_dfr = operation_dfr
-            self._current_user_dfr = user_dfr
 
             operation_dfr.addBoth(self._doneQuery)
 
