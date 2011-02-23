@@ -133,9 +133,9 @@ class MySQLConnection(ReconnectingClientFactory):
             return
 
         user_dfr, func, query, query_args = self._current_operation
+        self._current_user_dfr = user_dfr
         operation_dfr = func(query, query_args)
         self._current_operation_dfr = operation_dfr
-        self._current_user_dfr = user_dfr
 
         operation_dfr.addBoth(self._doneQuery)
 
