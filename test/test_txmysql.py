@@ -19,6 +19,20 @@ import secrets
 class MySQLClientTest(unittest.TestCase):
 
     @defer.inlineCallbacks
+    def test_001_two_queries_disconnected(self):
+        yield self._start_mysql()
+        conn = self._connect_mysql(retry_on_error=True, idle_timeout=1)
+        yield conn.runQuery("select 1")
+        yield sleep(2)
+        a = conn.runQuery("select 2")
+        b = conn.runQuery("select 3")
+        a, b = yield defer.gatherResults([a, b])
+        self.assertEquals(a, [[2]])
+        self.assertEquals(b, [[3]])
+        self.assertEquals((yield conn.runQuery("select 4")), [[4]])
+        conn.disconnect()
+
+    @defer.inlineCallbacks
     def test_002_start_query_restart(self):
         yield self._start_mysql()
         conn = self._connect_mysql(retry_on_error=True, idle_timeout=2)
@@ -28,7 +42,6 @@ class MySQLClientTest(unittest.TestCase):
         yield sleep(10)
         conn.disconnect()
         self.assertEquals(result, [[2]])
-
 
     def test_003_escaping(self):
         try:
