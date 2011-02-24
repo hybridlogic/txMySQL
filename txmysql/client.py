@@ -7,7 +7,7 @@ from twisted.internet.error import TimeoutError
 from twisted.python import log
 import time
 
-DEBUG = False
+DEBUG = True
 
 def _escape(query, args=None):
     if not args:
@@ -125,8 +125,7 @@ class MySQLConnection(ReconnectingClientFactory):
         return user_dfr
 
     def _retryOperation(self):
-        if DEBUG:
-            print "    Running retryOperation on current operation %s" % str(self._current_operation)
+        print "Running retryOperation on current operation %s" % str(self._current_operation)
 
         if not self._current_operation:
             # Oh, we weren't doing anything
@@ -149,8 +148,7 @@ class MySQLConnection(ReconnectingClientFactory):
             if isinstance(data, Failure):
                 if data.check(error.MySQLError):
                     if data.value.args[0] in self.temporary_error_strings:
-                        if DEBUG:
-                            print "    Found %s in %s, reconnecting and retrying" % (data.value.args[0], self.temporary_error_strings)
+                        print "CRITICAL: Found %s in %s, reconnecting and retrying" % (data.value.args[0], self.temporary_error_strings)
                         self.client.transport.loseConnection()
                         return
                 if DEBUG:
@@ -175,7 +173,7 @@ class MySQLConnection(ReconnectingClientFactory):
         the user right now, i.e. current user deferred exists)
         """
         if DEBUG:
-            print "    Running checkOperations on the current queue %s while current operation is %s" % (str(self._pending_operations), str(self._current_operation))
+            print "    Running checkOperations on the current queue of length %s while current operation is %s" % (str(len(self._pending_operations)), str(self._current_operation))
         #print "    Got to _checkOperations"
         if self._pending_operations and not self._current_user_dfr:
             # Take the next pending operation off the queue
@@ -265,16 +263,14 @@ class MySQLConnection(ReconnectingClientFactory):
         return data
 
     def clientConnectionFailed(self, connector, reason):
-        if DEBUG:
-            print "    Got clientConnectionFailed for reason %s" % str(reason)
+        print "Got clientConnectionFailed for reason %s" % str(reason)
         self._error_condition = True
         if self.state != 'disconnecting':
             self.stateTransition(state='connecting', reason=reason)
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
     
     def clientConnectionLost(self, connector, reason):
-        if DEBUG:
-            print "    Got clientConnectionLost for reason %s" % str(reason)
+        print "Got clientConnectionLost for reason %s" % str(reason)
         self._error_condition = True
         if self.state != 'disconnecting':
             self.stateTransition(state='connecting', reason=reason)
