@@ -10,7 +10,7 @@ import time
 DEBUG = True
 
 def _escape(query, args=None):
-    if not args:
+    if args is None:
         return query
     escaped_args = []
     for arg in args:
@@ -148,7 +148,7 @@ class MySQLConnection(ReconnectingClientFactory):
             if isinstance(data, Failure):
                 if data.check(error.MySQLError):
                     if data.value.args[0] in self.temporary_error_strings:
-                        print "CRITICAL: Found %s in %s, reconnecting and retrying" % (data.value.args[0], self.temporary_error_strings)
+                        print "CRITICAL: Found %s, reconnecting and retrying" % (data.value.args[0])
                         self.client.transport.loseConnection()
                         return
                 if DEBUG:
