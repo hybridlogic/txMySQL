@@ -267,6 +267,8 @@ class MySQLConnection(ReconnectingClientFactory):
         self._error_condition = True
         if self.state != 'disconnecting':
             self.stateTransition(state='connecting', reason=reason)
+        print "Discarding client", self.client
+        self.client = None
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
     
     def clientConnectionLost(self, connector, reason):
@@ -274,6 +276,8 @@ class MySQLConnection(ReconnectingClientFactory):
         self._error_condition = True
         if self.state != 'disconnecting':
             self.stateTransition(state='connecting', reason=reason)
+        print "Discarding client", self.client
+        self.client = None
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
     
     @defer.inlineCallbacks
@@ -306,6 +310,7 @@ class MySQLConnection(ReconnectingClientFactory):
                 idle_timeout=self.idle_timeout)
         p.factory = self
         self.client = p
+        print "New client is", self.client
         #print self.client.ready_deferred
         self.deferred.callback(self.client)
         self.deferred = defer.Deferred()
