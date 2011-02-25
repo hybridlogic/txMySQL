@@ -104,7 +104,7 @@ class MySQLConnection(ReconnectingClientFactory):
         self._pending_operations.append((user_dfr, self._doQuery, query, query_args))
         self._checkOperations()
         if DEBUG:
-            print "    Appending query \"%s\" which is due to fire back on new user deferred %s" % (query, user_dfr)
+            print "Appending query \"%s\" which is due to fire back on new user deferred %s" % (query, user_dfr)
         return user_dfr
 
     def selectDb(self, db):
@@ -113,7 +113,7 @@ class MySQLConnection(ReconnectingClientFactory):
         self._checkOperations()
         self.database = db
         if DEBUG:
-            print "    Appending selectDb \"%s\" which is due to fire back None on new user deferred %s" % (db, user_dfr)
+            print "Appending selectDb \"%s\" which is due to fire back None on new user deferred %s" % (db, user_dfr)
         return user_dfr
 
     def runOperation(self, query, query_args=None):
@@ -121,7 +121,7 @@ class MySQLConnection(ReconnectingClientFactory):
         self._pending_operations.append((user_dfr, self._doOperation, query, query_args))
         self._checkOperations()
         if DEBUG:
-            print "    Appending operation \"%s\" which is due to fire back None on new user deferred %s when complete" % (query, user_dfr)
+            print "Appending operation \"%s\" which is due to fire back None on new user deferred %s when complete" % (query, user_dfr)
         return user_dfr
 
     def _executeCurrentOperation(self):
@@ -129,8 +129,8 @@ class MySQLConnection(ReconnectingClientFactory):
         user_dfr, func, query, query_args = self._current_operation
         
         if DEBUG:
-            print "    Setting current operation to %s" % str(self._current_operation)
-            print "    About to run %s(%s, %s) and fire back on %s" % (str(func), str(query), str(query_args), str(user_dfr))
+            print "Setting current operation to %s" % str(self._current_operation)
+            print "About to run %s(%s, %s) and fire back on %s" % (str(func), str(query), str(query_args), str(user_dfr))
         
         self._current_user_dfr = user_dfr
         operation_dfr = func(query, query_args)
@@ -162,15 +162,15 @@ class MySQLConnection(ReconnectingClientFactory):
                         self.client.transport.loseConnection()
                         return
                 if DEBUG:
-                    print "    Query failed with error %s, errback firing back on %s" % (data, self._current_user_dfr)
+                    print "Query failed with error %s, errback firing back on %s" % (data, self._current_user_dfr)
                 self._current_user_dfr.errback(data)
             else:
                 if DEBUG:
-                    print "    Query is done with result %s, firing back on %s" % (data, self._current_user_dfr)
+                    print "Query is done with result %s, firing back on %s" % (data, self._current_user_dfr)
                 self._current_user_dfr.callback(data)
             self._current_user_dfr = None
         else:
-            print "    CRITICAL WARNING! Current user deferred was None when a query fired back with %s - there should always be a user deferred to fire the response to..." % data
+            print "CRITICAL WARNING! Current user deferred was None when a query fired back with %s - there should always be a user deferred to fire the response to..." % data
         self._error_condition = False
         self._current_operation = None
         self._current_operation_dfr = None
@@ -183,8 +183,8 @@ class MySQLConnection(ReconnectingClientFactory):
         the user right now, i.e. current user deferred exists)
         """
         if DEBUG:
-            print "    Running checkOperations on the current queue of length %s while current operation is %s" % (str(len(self._pending_operations)), str(self._current_operation))
-        #print "    Got to _checkOperations"
+            print "Running checkOperations on the current queue of length %s while current operation is %s" % (str(len(self._pending_operations)), str(self._current_operation))
+        #print "Got to _checkOperations"
 
         if self.state == 'connecting' and self._error_condition:
             if DEBUG:
@@ -207,52 +207,52 @@ class MySQLConnection(ReconnectingClientFactory):
             return
 
         if DEBUG:
-            print "    Transition from %s to %s" % (self.state, new_state)
+            print "Transition from %s to %s" % (self.state, new_state)
         
         self.state = new_state
         
         # connected => not connected
         if old_state == 'connected' and new_state != 'connected':
             if DEBUG:
-                print "    We are disconnecting..."
+                print "We are disconnecting..."
             # We have just lost a connection, if we're in the middle of
             # something, send an errback, unless we're going to retry 
             # on reconnect, in which case do nothing
             if not self.retry_on_error and self._current_operation:
                 if DEBUG:
-                    print "    Not retrying on error, current user deferred %s about to get failure %s" % (self._current_user_dfr, reason)
+                    print "Not retrying on error, current user deferred %s about to get failure %s" % (self._current_user_dfr, reason)
                 if self._current_user_dfr and not self._current_user_dfr.called:
                     if DEBUG:
-                        print "    Current user deferred exists and has not been called yet, running errback on deferred %s about to get failure %s" % (self._current_user_dfr, reason)
+                        print "Current user deferred exists and has not been called yet, running errback on deferred %s about to get failure %s" % (self._current_user_dfr, reason)
                     self._current_user_dfr.errback(reason)
                     self._current_user_dfr = None
                     self._current_operation = None
                     self._current_operation_dfr = None
                 else:
                     if DEBUG:
-                        print "    Current user deferred has already been fired in error handler, not doing anything"
+                        print "Current user deferred has already been fired in error handler, not doing anything"
 
         # not connected => connected
         if old_state != 'connected' and new_state == 'connected':
             if DEBUG:
-                print "    We are connected..."
+                print "We are connected..."
             # We have just made a new connection, if we were in the middle of
             # something when we got disconnected and we want to retry it, retry
             # it now
             if self._current_operation and self._error_condition:
                 if self.retry_on_error:
                     if DEBUG:
-                        print "    Retrying on error %s, with current operation %s" % (str(reason), str(self._current_operation))
+                        print "Retrying on error %s, with current operation %s" % (str(reason), str(self._current_operation))
                     # Retry the current operation
                     self._retryOperation()
                 else:
                     if DEBUG:
-                        print "    Not retrying on error, connection made, nothing to do."
+                        print "Not retrying on error, connection made, nothing to do."
            
             else:
                 # We may have something in our queue which was waiting until we became connected
                 if DEBUG:
-                    print "    Connected, check whether we have any operations to perform"
+                    print "Connected, check whether we have any operations to perform"
                 self._checkOperations()
         
         return data
@@ -281,7 +281,7 @@ class MySQLConnection(ReconnectingClientFactory):
     def _begin(self):
         if self.state == 'disconnected':
             if DEBUG:
-                print "    Connecting after being disconnected, with connection timeout %s" % self.connect_timeout
+                print "Connecting after being disconnected, with connection timeout %s" % self.connect_timeout
             self.stateTransition(state='connecting')
             # TODO: Use UNIX socket if string is "localhost"
             reactor.connectTCP(self.hostname, self.port, self, timeout=self.connect_timeout)
@@ -289,20 +289,20 @@ class MySQLConnection(ReconnectingClientFactory):
             yield self.client.ready_deferred
         elif self.state == 'connecting':
             if DEBUG:
-                print "    Yielding on a successful connection, deferred is %s" % self.deferred
+                print "Yielding on a successful connection, deferred is %s" % self.deferred
             yield self.deferred
             if DEBUG:
-                print "    Yielding on a successful ready deferred"
+                print "Yielding on a successful ready deferred"
             yield self.client.ready_deferred
         elif self.state == 'connected':
             if DEBUG:
-                print "    Already connected when a query was attempted, well that was easy"
+                print "Already connected when a query was attempted, well that was easy"
             pass
     
     def buildProtocol(self, addr):
         if DEBUG:
-            print "    Building a new MySQLProtocol instance for connection to %s, attempting to connect, using idle timeout %s" % (addr, self.idle_timeout)
-        #print "    Running buildprotocol for %s" % addr
+            print "Building a new MySQLProtocol instance for connection to %s, attempting to connect, using idle timeout %s" % (addr, self.idle_timeout)
+        #print "Running buildprotocol for %s" % addr
         p = self.protocol(self.username, self.password, self.database,
                 idle_timeout=self.idle_timeout)
         p.factory = self
@@ -314,7 +314,7 @@ class MySQLConnection(ReconnectingClientFactory):
         self.deferred = defer.Deferred()
         def when_connected(data):
             if DEBUG:
-                print "    Connection just successfully made, and MySQL handshake/auth completed. About to transition to connected..."
+                print "Connection just successfully made, and MySQL handshake/auth completed. About to transition to connected..."
             self.stateTransition(state='connected')
             return data
         self.client.ready_deferred.addCallback(when_connected)
@@ -324,7 +324,7 @@ class MySQLConnection(ReconnectingClientFactory):
     @defer.inlineCallbacks
     def _doQuery(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "    Attempting an actual query \"%s\"" % _escape(query, query_args) 
+            print "Attempting an actual query \"%s\"" % _escape(query, query_args) 
         yield self._begin()
         result = yield self.client.fetchall(_escape(query, query_args))
         defer.returnValue(result)
@@ -332,13 +332,13 @@ class MySQLConnection(ReconnectingClientFactory):
     @defer.inlineCallbacks
     def _doOperation(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "    Attempting an actual operation \"%s\"" % _escape(query, query_args)
+            print "Attempting an actual operation \"%s\"" % _escape(query, query_args)
         yield self._begin()
         yield self.client.query(_escape(query, query_args))
 
     @defer.inlineCallbacks
     def _doSelectDb(self, db, ignored):
         if DEBUG:
-            print "    Attempting an actual selectDb \"%s\"" % db
+            print "Attempting an actual selectDb \"%s\"" % db
         yield self._begin()
         yield self.client.select_db(db)
