@@ -7,7 +7,7 @@ from twisted.internet.error import TimeoutError
 from twisted.python import log
 import time
 
-DEBUG = True
+DEBUG = False
 
 def _escape(query, args=None):
     if args is None:
@@ -134,9 +134,7 @@ class MySQLConnection(ReconnectingClientFactory):
         
         self._current_user_dfr = user_dfr
         operation_dfr = func(query, query_args)
-        #operation_dfr.addErrback(log.err)
-        # Store a reference to the current operation (there's gonna be only
-        # one running at a time)
+        # Store a reference to the current operation (there's gonna be only one running at a time)
         self._current_operation_dfr = operation_dfr
 
         operation_dfr.addBoth(self._doneQuery)
@@ -172,7 +170,7 @@ class MySQLConnection(ReconnectingClientFactory):
                 self._current_user_dfr.callback(data)
             self._current_user_dfr = None
         else:
-            print "    WARNING! Current user deferred was None when a query fired back with %s - there should always be a user deferred to fire the response to..." % data
+            print "    CRITICAL WARNING! Current user deferred was None when a query fired back with %s - there should always be a user deferred to fire the response to..." % data
         self._error_condition = False
         self._current_operation = None
         self._current_operation_dfr = None
@@ -236,19 +234,16 @@ class MySQLConnection(ReconnectingClientFactory):
 
         # not connected => connected
         if old_state != 'connected' and new_state == 'connected':
-            #print "    In branch 2"
             if DEBUG:
                 print "    We are connected..."
             # We have just made a new connection, if we were in the middle of
             # something when we got disconnected and we want to retry it, retry
             # it now
             if self._current_operation and self._error_condition:
-                #print "    In branch 2.1, current operation is %s" % str(self._current_operation)
                 if self.retry_on_error:
                     if DEBUG:
                         print "    Retrying on error %s, with current operation %s" % (str(reason), str(self._current_operation))
                     # Retry the current operation
-                    #print "    In branch 2.1.1"
                     self._retryOperation()
                 else:
                     if DEBUG:
@@ -256,29 +251,30 @@ class MySQLConnection(ReconnectingClientFactory):
            
             else:
                 # We may have something in our queue which was waiting until we became connected
-                #print "    In branch 2.2"
                 if DEBUG:
                     print "    Connected, check whether we have any operations to perform"
                 self._checkOperations()
         
         return data
 
-    def clientConnectionFailed(self, connector, reason):
-        print "Got clientConnectionFailed for reason %s" % str(reason)
+    def _handleError(self, reason):
         self._error_condition = True
         if self.state != 'disconnecting':
             self.stateTransition(state='connecting', reason=reason)
-        print "Discarding client", self.client
+        if DEBUG:
+            print "Discarding client", self.client
         self.client = None
+
+    def clientConnectionFailed(self, connector, reason):
+        if DEBUG:
+            print "Got clientConnectionFailed for reason %s" % str(reason)
+        self._handleError(reason)
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
     
     def clientConnectionLost(self, connector, reason):
-        print "Got clientConnectionLost for reason %s" % str(reason)
-        self._error_condition = True
-        if self.state != 'disconnecting':
-            self.stateTransition(state='connecting', reason=reason)
-        print "Discarding client", self.client
-        self.client = None
+        if DEBUG:
+            print "Got clientConnectionLost for reason %s" % str(reason)
+        self._handleError(reason)
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
     
     @defer.inlineCallbacks
@@ -311,7 +307,8 @@ class MySQLConnection(ReconnectingClientFactory):
                 idle_timeout=self.idle_timeout)
         p.factory = self
         self.client = p
-        print "New client is", self.client
+        if DEBUG:
+            print "New client is", self.client
         #print self.client.ready_deferred
         self.deferred.callback(self.client)
         self.deferred = defer.Deferred()
