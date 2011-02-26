@@ -267,7 +267,7 @@ class MySQLConnection(ReconnectingClientFactory):
         self.client = None
         if self._pending_operations or self._current_operation:
             self._error_condition = True
-            if self.state != 'disconnecting': # XXX ??? and self._pending_operations:
+            if self.state != 'disconnecting':
                 self.stateTransition(state='connecting', reason=reason)
         else:
             self.continueTrying = 0
