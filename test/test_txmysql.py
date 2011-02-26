@@ -27,11 +27,7 @@ class MySQLClientTest(unittest.TestCase):
         yield self._start_mysql()
         conn = self._connect_mysql(retry_on_error=True, idle_timeout=2)
         res = yield conn.runQuery("select 1")
-        print res
         yield sleep(6)
-        print conn
-        #import pdb
-        #pdb.set_trace()
         self.assertIdentical(conn.client, None)
         conn.disconnect()
     
