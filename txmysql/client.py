@@ -144,7 +144,8 @@ class MySQLConnection(ReconnectingClientFactory):
         operation_dfr.addBoth(self._checkOperations)
 
     def _retryOperation(self):
-        print "Running retryOperation on current operation %s" % str(self._current_operation)
+        if DEBUG:
+            print "Running retryOperation on current operation %s" % str(self._current_operation)
 
         if not self._current_operation:
             # Oh, we weren't doing anything
@@ -186,7 +187,7 @@ class MySQLConnection(ReconnectingClientFactory):
             print "Running checkOperations on the current queue of length %s while current operation is %s" % (str(len(self._pending_operations)), str(self._current_operation))
         #print "Got to _checkOperations"
 
-        if self.state == 'connecting' and self._error_condition:
+        if self.state == 'connecting' and self._error_condition and self.retry_on_error:
             if DEBUG:
                 print "Not running the query now, because the reconnection handler will handle it"
             return _ign
@@ -257,9 +258,11 @@ class MySQLConnection(ReconnectingClientFactory):
         
         return data
 
-    def _handleError(self, reason):
+    def _handleConnectionError(self, reason):
+        # This may have been caused by TimeoutMixing disconnecting us.
+        # TODO: If there's no current operation and no pending operations, don't both reconnecting
         self._error_condition = True
-        if self.state != 'disconnecting':
+        if self.state != 'disconnecting': # XXX ??? and self._pending_operations:
             self.stateTransition(state='connecting', reason=reason)
         if DEBUG:
             print "Discarding client", self.client
@@ -268,13 +271,13 @@ class MySQLConnection(ReconnectingClientFactory):
     def clientConnectionFailed(self, connector, reason):
         if DEBUG:
             print "Got clientConnectionFailed for reason %s" % str(reason)
-        self._handleError(reason)
+        self._handleConnectionError(reason)
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
     
     def clientConnectionLost(self, connector, reason):
         if DEBUG:
             print "Got clientConnectionLost for reason %s" % str(reason)
-        self._handleError(reason)
+        self._handleConnectionError(reason)
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
     
     @defer.inlineCallbacks
