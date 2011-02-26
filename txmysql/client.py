@@ -7,7 +7,7 @@ from twisted.internet.error import TimeoutError
 from twisted.python import log
 import time
 
-DEBUG = False
+DEBUG = True
 
 def _escape(query, args=None):
     if args is None:
@@ -99,30 +99,30 @@ class MySQLConnection(ReconnectingClientFactory):
         # a retry of a failed connection
         self._error_condition = False
 
-    def runQuery(self, query, query_args=None):
+    def _handleIncomingRequest(self, name, fn, arg0, arg1):
+        """
+        A handler for all new requests, gets parameterised by
+        runQuery, selectDb and runOperation
+        """
+        # We have some new work to do, in case we get disconnected, we want to try
+        # reconnecting again now.
+        self.continueTrying = 1
         user_dfr = defer.Deferred()
-        self._pending_operations.append((user_dfr, self._doQuery, query, query_args))
+        self._pending_operations.append((user_dfr, fn, arg0, arg1))
         self._checkOperations()
         if DEBUG:
-            print "Appending query \"%s\" which is due to fire back on new user deferred %s" % (query, user_dfr)
+            print "Appending %s \"%s\" with args %s which is due to fire back on new user deferred %s" % (name, arg0, arg1, user_dfr)
         return user_dfr
 
-    def selectDb(self, db):
-        user_dfr = defer.Deferred()
-        self._pending_operations.append((user_dfr, self._doSelectDb, db, None))
-        self._checkOperations()
-        self.database = db
-        if DEBUG:
-            print "Appending selectDb \"%s\" which is due to fire back None on new user deferred %s" % (db, user_dfr)
-        return user_dfr
+    def runQuery(self, query, query_args=None):
+        return self._incomingInterface('query', self._doQuery, query, query_args)
 
     def runOperation(self, query, query_args=None):
-        user_dfr = defer.Deferred()
-        self._pending_operations.append((user_dfr, self._doOperation, query, query_args))
-        self._checkOperations()
-        if DEBUG:
-            print "Appending operation \"%s\" which is due to fire back None on new user deferred %s when complete" % (query, user_dfr)
-        return user_dfr
+        return self._incomingInterface('operation', self._doOperation, query, query_args)
+    
+    def selectDb(self, db):
+        self.database = db
+        return self._incomingInterface('selectDb', self._doSelectDb, db, None)
 
     def _executeCurrentOperation(self):
         # Actually execute it, operation_dfr will fire when the database returns
@@ -261,12 +261,17 @@ class MySQLConnection(ReconnectingClientFactory):
     def _handleConnectionError(self, reason):
         # This may have been caused by TimeoutMixing disconnecting us.
         # TODO: If there's no current operation and no pending operations, don't both reconnecting
-        self._error_condition = True
-        if self.state != 'disconnecting': # XXX ??? and self._pending_operations:
-            self.stateTransition(state='connecting', reason=reason)
+        # Use: self.stopTrying() and self.startTrying()?
         if DEBUG:
             print "Discarding client", self.client
         self.client = None
+        if self._pending_operations or self._current_operation:
+            self._error_condition = True
+            if self.state != 'disconnecting': # XXX ??? and self._pending_operations:
+                self.stateTransition(state='connecting', reason=reason)
+        else:
+            self.continueTrying = 0
+            self.stateTransition(state='disconnected')
 
     def clientConnectionFailed(self, connector, reason):
         if DEBUG:

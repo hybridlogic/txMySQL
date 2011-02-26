@@ -19,7 +19,24 @@ import secrets
 class MySQLClientTest(unittest.TestCase):
 
     @defer.inlineCallbacks
-    def test_001_two_queries_disconnected(self):
+    def test_0005_query_timeout_stay_disconnected(self):
+        """
+        Checks that when there are no pending or current operations that we
+        disconnect and stay disconnected
+        """
+        yield self._start_mysql()
+        conn = self._connect_mysql(retry_on_error=True, idle_timeout=2)
+        res = yield conn.runQuery("select 1")
+        print res
+        yield sleep(6)
+        print conn
+        #import pdb
+        #pdb.set_trace()
+        self.assertIdentical(conn.client, None)
+        conn.disconnect()
+    
+    @defer.inlineCallbacks
+    def test_0010_two_queries_disconnected(self):
         yield self._start_mysql()
         conn = self._connect_mysql(retry_on_error=True, idle_timeout=1)
         yield conn.runQuery("select 1")
@@ -33,8 +50,7 @@ class MySQLClientTest(unittest.TestCase):
         conn.disconnect()
 
     @defer.inlineCallbacks
-    def test_002_start_query_restart(self):
-        return
+    def test_0020_start_query_restart(self):
         yield self._start_mysql()
         conn = self._connect_mysql(retry_on_error=True, idle_timeout=2)
         result = yield conn.runQuery("select 2")
@@ -44,8 +60,7 @@ class MySQLClientTest(unittest.TestCase):
         conn.disconnect()
         self.assertEquals(result, [[2]])
 
-    def test_003_escaping(self):
-        return
+    def test_0030_escaping(self):
         try:
             client._escape("%s", ())
             self.fail("that should have raised an exception")
@@ -62,8 +77,7 @@ class MySQLClientTest(unittest.TestCase):
         self.assertEquals(result, "update foo set bar='%s' where baz='%%s' or bash='123'")
 
     @defer.inlineCallbacks
-    def test_004_thrash(self):
-        return
+    def test_0040_thrash(self):
         yield self._start_mysql()
         conn = self._connect_mysql(retry_on_error=True)
         yield conn.runOperation("drop table if exists thrashtest")
@@ -102,7 +116,7 @@ class MySQLClientTest(unittest.TestCase):
 
 
     @defer.inlineCallbacks
-    def test_005_test_initial_database_selection(self):
+    def test_0050_test_initial_database_selection(self):
         """
         1. Start MySQL
         2. Connect
@@ -115,7 +129,7 @@ class MySQLClientTest(unittest.TestCase):
         self.assertEquals(result, [[1]])
 
     @defer.inlineCallbacks
-    def test_010_start_connect_query(self):
+    def test_0100_start_connect_query(self):
         """
         1. Start MySQL
         2. Connect
@@ -128,7 +142,7 @@ class MySQLClientTest(unittest.TestCase):
         self.assertEquals(result, [[2]])
 
     @defer.inlineCallbacks
-    def test_020_stop_connect_query_start(self):
+    def test_0200_stop_connect_query_start(self):
         """
         1. Connect, before MySQL is started
         2. Start MySQL
@@ -143,7 +157,7 @@ class MySQLClientTest(unittest.TestCase):
         self.assertEquals(result, [[2]])
 
     @defer.inlineCallbacks
-    def test_021_stop_connect_query_start_retry_on_error(self):
+    def test_0210_stop_connect_query_start_retry_on_error(self):
         """
         1. Connect, before MySQL is started
         2. Start MySQL
@@ -157,7 +171,7 @@ class MySQLClientTest(unittest.TestCase):
         self.assertEquals(result, [[2]])
 
     @defer.inlineCallbacks
-    def test_030_start_idle_timeout(self):
+    def test_0300_start_idle_timeout(self):
         """
         Connect, with evildaemon in place of MySQL
         Evildaemon stops in 5 seconds, which is longer than our idle timeout
@@ -174,7 +188,7 @@ class MySQLClientTest(unittest.TestCase):
         self.assertEquals(result, [[2]])
 
     @defer.inlineCallbacks
-    def test_040_start_connect_long_query_timeout(self):
+    def test_0400_start_connect_long_query_timeout(self):
         """
         Connect to the real MySQL, run a long-running query which exceeds the
         idle timeout, check that it times out and returns the appropriate
@@ -191,7 +205,7 @@ class MySQLClientTest(unittest.TestCase):
             conn.disconnect()
         
     @defer.inlineCallbacks
-    def test_050_retry_on_error(self):
+    def test_0500_retry_on_error(self):
         """
         Start a couple of queries in parallel.
         Both of them should take 10 seconds, but restart the MySQL
@@ -211,7 +225,7 @@ class MySQLClientTest(unittest.TestCase):
         self.assertEquals(result, [(True, [[0]]), (True, [[0]])])
 
     @defer.inlineCallbacks
-    def test_055_its_just_one_thing_after_another_with_you(self):
+    def test_0550_its_just_one_thing_after_another_with_you(self):
         """
         Sanity check that you can do one thing and then another thing.
         """
@@ -222,7 +236,7 @@ class MySQLClientTest(unittest.TestCase):
         conn.disconnect()
 
     @defer.inlineCallbacks
-    def test_060_error_strings_test(self):
+    def test_0600_error_strings_test(self):
         """
         This test causes MySQL to return what we consider a temporary local
         error.  We do this by starting MySQL, querying a table, then physically
