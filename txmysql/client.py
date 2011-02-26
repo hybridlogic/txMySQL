@@ -115,14 +115,14 @@ class MySQLConnection(ReconnectingClientFactory):
         return user_dfr
 
     def runQuery(self, query, query_args=None):
-        return self._incomingInterface('query', self._doQuery, query, query_args)
+        return self._handleIncomingRequest('query', self._doQuery, query, query_args)
 
     def runOperation(self, query, query_args=None):
-        return self._incomingInterface('operation', self._doOperation, query, query_args)
+        return self._handleIncomingRequest('operation', self._doOperation, query, query_args)
     
     def selectDb(self, db):
         self.database = db
-        return self._incomingInterface('selectDb', self._doSelectDb, db, None)
+        return self._handleIncomingRequest('selectDb', self._doSelectDb, db, None)
 
     def _executeCurrentOperation(self):
         # Actually execute it, operation_dfr will fire when the database returns
