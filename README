@@ -1,4 +1,4 @@
-Twisted MySQL Protocol implementation. Consider this v0.2
+Twisted MySQL Protocol implementation. Consider this v0.3
 
 With thanks to _habnabit for the intial code (which did the vast majority of
 the heavy lifting) and his qbuf library.
@@ -14,18 +14,19 @@ NEW FEATURES:
       user-configurable errors with temporary_error_strings=[...] in the
       constructor)
     * Now has unit tests
+    * Support escaping arguments with '%s' style syntax
+    * Actually use the database=foo argument passed into the constructor
+      (need to set CLIENT_* flag)
+    * Code comments, and a lot of tidying up
+    * Fixed insidious bug relating to disconnection which resulted
+      in corrupt/duplicated results getting sent on the wrong deferreds
 
 TODO:
 
-    * Support escaping arguments with '?' or '%s' style syntax (my preference
-      being for the former)
     * DateTime support (see pymysql.converters for how to do this)
     * Iterator protocol for iterating over large results sets, lazily
       loaded as they come back from the server
     * DBAPI support - see http://www.python.org/dev/peps/pep-0249/
-    * Actually use the database=foo argument passed into the constructor
-      (need to set CLIENT_* flag)
-    * Code comments, and a lot of tidying up
     * Test against more than just the version of MySQL 5.1 which happened
       to be installed on my ThinkPad :-)
 
