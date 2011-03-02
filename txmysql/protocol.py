@@ -293,7 +293,8 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             p.pack('<BIBIB', 0x17, stmt_id, 1, 1, 1)
         result = yield self.read_result(read_rows=False)
         defer.returnValue([d['type'] for d in result['fields']])
-   
+  
+    @defer.inlineCallbacks
     def _close_stmt(self, stmt_id):
         """
         Destroy a prepared statement. The statement handle becomes invalid.
