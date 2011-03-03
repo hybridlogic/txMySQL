@@ -335,11 +335,8 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         Destroy a prepared statement. The statement handle becomes invalid.
         """
         with util.DataPacker(self) as p:
-            p.pack('<BIBIB', 0x17, stmt_id, 1, 1, 1)
-        #print "About to yield on read_header"
-        result = yield self.read_result(read_rows=False)
-        #print "Got %s after closing stmt %s" % (str(result), str(stmt_id))
-        defer.returnValue(result)
+            p.pack('<BIB', 0x19, stmt_id, 1)
+        yield defer.succeed(True)
 
 
     @defer.inlineCallbacks
