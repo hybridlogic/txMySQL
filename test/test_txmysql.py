@@ -20,7 +20,6 @@ class MySQLClientTest(unittest.TestCase):
 
     @defer.inlineCallbacks
     def test_0004_cleanup_prepared_statements(self):
-        return
         """
         Checks that when there are no pending or current operations that we
         disconnect and stay disconnected.
