@@ -294,17 +294,6 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         result = yield self.read_result(read_rows=False)
         defer.returnValue([d['type'] for d in result['fields']])
   
-    @defer.inlineCallbacks
-    def _close_stmt(self, stmt_id):
-        """
-        Destroy a prepared statement. The statement handle becomes invalid.
-        """
-        with util.DataPacker(self) as p:
-            p.pack('<BI', 0x19, stmt_id)
-        result = yield self.read_result()
-        print "Got %s after closing stmt %i" % (str(result), str(p))
-        defer.returnValue(result)
-
 
     @operation
     def _fetch(self, stmt_id, rows, types):
@@ -319,9 +308,6 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
                 break
             rows.append(result)
 
-        # Perhaps optimise this by not yielding here, although being sure of
-        # correctness then is tricky
-        yield self._close_stmt(stmt_id)
         defer.returnValue((rows, more_rows))
 
 
@@ -342,10 +328,23 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             p.write(query)
 
         ret = yield self.read_result()
+    
+    @operation
+    def _close_stmt(self, stmt_id):
+        """
+        Destroy a prepared statement. The statement handle becomes invalid.
+        """
+        with util.DataPacker(self) as p:
+            p.pack('<BIBIB', 0x17, stmt_id, 1, 1, 1)
+        #print "About to yield on read_header"
+        result = yield self.read_result(read_rows=False)
+        #print "Got %s after closing stmt %s" % (str(result), str(stmt_id))
+        defer.returnValue(result)
+
 
     @defer.inlineCallbacks
     def fetchall(self, query):
-        assert '\0' not in query, 'No NULs in your query, boy!'
+        #assert '\0' not in query, 'No NULs in your query, boy!'
         result = yield self._prepare(query)
         types = yield self._execute(result['stmt_id'])
 
@@ -356,5 +355,10 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
                 all_rows.append(row['cols'])
             if not more_rows:
                 break
-
+        print "****************************** Got last result" 
+        # Perhaps optimise this by not yielding here, although being sure of
+        # correctness then is tricky
+        yield self._close_stmt(result['stmt_id'])
         defer.returnValue(all_rows)
+
+

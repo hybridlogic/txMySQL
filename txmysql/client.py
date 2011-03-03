@@ -7,9 +7,9 @@ from twisted.internet.error import TimeoutError
 from twisted.python import log
 import time
 
-DEBUG = False
+DEBUG = True
 
-def _escape(query, args=None):
+def _escape(query, args=None): # XXX: Add Rob's suggestion for escaping
     if args is None:
         return query
     escaped_args = []
