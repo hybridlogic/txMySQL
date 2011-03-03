@@ -352,9 +352,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
                 all_rows.append(row['cols'])
             if not more_rows:
                 break
-        print "****************************** Got last result" 
-        # Perhaps optimise this by not yielding here, although being sure of
-        # correctness then is tricky
+        #print "****************************** Got last result" 
         yield self._close_stmt(result['stmt_id'])
         defer.returnValue(all_rows)
 

@@ -96,7 +96,7 @@ class MySQLConnection(ReconnectingClientFactory):
         self._current_user_dfr = None
 
         # Set when we get disconnected, so that we know to attempt
-        # a retry of a failed connection
+        # a retry of a failed operation
         self._error_condition = False
 
     def _handleIncomingRequest(self, name, fn, arg0, arg1):
@@ -150,7 +150,6 @@ class MySQLConnection(ReconnectingClientFactory):
         if not self._current_operation:
             # Oh, we weren't doing anything
             return
-
         self._executeCurrentOperation()
 
     def _doneQuery(self, data):
@@ -172,6 +171,7 @@ class MySQLConnection(ReconnectingClientFactory):
             self._current_user_dfr = None
         else:
             print "CRITICAL WARNING! Current user deferred was None when a query fired back with %s - there should always be a user deferred to fire the response to..." % data
+            raise Exception("txMySQL internal inconsistency")
         self._error_condition = False
         self._current_operation = None
         self._current_operation_dfr = None
@@ -186,11 +186,6 @@ class MySQLConnection(ReconnectingClientFactory):
         if DEBUG:
             print "Running checkOperations on the current queue of length %s while current operation is %s" % (str(len(self._pending_operations)), str(self._current_operation))
         #print "Got to _checkOperations"
-
-        if self.state == 'connecting' and self._error_condition and self.retry_on_error:
-            if DEBUG:
-                print "Not running the query now, because the reconnection handler will handle it"
-            return _ign
 
         if self._pending_operations and not self._current_user_dfr:
             # Store its parameters in case we need to run it again
@@ -242,10 +237,15 @@ class MySQLConnection(ReconnectingClientFactory):
             # it now
             if self._current_operation and self._error_condition:
                 if self.retry_on_error:
+                    print "Would have run retry here..."
                     if DEBUG:
                         print "Retrying on error %s, with current operation %s" % (str(reason), str(self._current_operation))
                     # Retry the current operation
-                    self._retryOperation()
+                    if not (self.state == 'connecting' and self._error_condition and self.retry_on_error):
+                        if DEBUG:
+                            print "Not running the query now, because the reconnection handler will handle it"
+                        self._retryOperation()
+
                 else:
                     if DEBUG:
                         print "Not retrying on error, connection made, nothing to do."
@@ -258,7 +258,7 @@ class MySQLConnection(ReconnectingClientFactory):
         
         return data
 
-    def _handleConnectionError(self, reason):
+    def _handleConnectionError(self, reason, is_failed):
         # This may have been caused by TimeoutMixing disconnecting us.
         # TODO: If there's no current operation and no pending operations, don't both reconnecting
         # Use: self.stopTrying() and self.startTrying()?
@@ -266,7 +266,12 @@ class MySQLConnection(ReconnectingClientFactory):
             print "Discarding client", self.client
         self.client = None
         if self._pending_operations or self._current_operation:
-            self._error_condition = True
+            if not is_failed:
+                # On connectionFailed, rather than connectionLost, we will never have
+                # started trying to execute the query yet, because we didn't get a connection
+                # So only set _error_condition if it was a connectionLost, because it results
+                # in behaviour which expects a current_operation
+                self._error_condition = True
             if self.state != 'disconnecting':
                 self.stateTransition(state='connecting', reason=reason)
         else:
@@ -276,13 +281,13 @@ class MySQLConnection(ReconnectingClientFactory):
     def clientConnectionFailed(self, connector, reason):
         if DEBUG:
             print "Got clientConnectionFailed for reason %s" % str(reason)
-        self._handleConnectionError(reason)
+        self._handleConnectionError(reason, is_failed=True)
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
     
     def clientConnectionLost(self, connector, reason):
         if DEBUG:
             print "Got clientConnectionLost for reason %s" % str(reason)
-        self._handleConnectionError(reason)
+        self._handleConnectionError(reason, is_failed=False)
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
     
     @defer.inlineCallbacks
