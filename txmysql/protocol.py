@@ -335,7 +335,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         Destroy a prepared statement. The statement handle becomes invalid.
         """
         with util.DataPacker(self) as p:
-            p.pack('<BIB', 0x19, stmt_id, 1)
+            p.pack('<BI', 0x19, stmt_id)
         yield defer.succeed(True)
 
 
