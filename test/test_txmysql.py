@@ -4,6 +4,9 @@ Test txMySQL against a local MySQL server
 This test requires 'sudo' without a password, and expects a stock Ubuntu 10.04
 MySQL setup. It will start and stop MySQL and occasionally replace it with an
 evil daemon which absorbs packets.
+
+TODO: Check code coverage for every line, then manually any compound expression
+in a conditional to check that there is test case coverage for each case.
 """
 
 from twisted.trial import unittest
