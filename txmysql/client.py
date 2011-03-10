@@ -163,6 +163,9 @@ class MySQLConnection(ReconnectingClientFactory):
                         return
                 if DEBUG:
                     print "Query failed with error %s, errback firing back on %s" % (data, self._current_user_dfr)
+                # XXX: If this an errback due to MySQL closing the connection,
+                # and we are retry_on_true, and so we have set
+                # _error_condition,  shouldn't we mask the failure?
                 self._current_user_dfr.errback(data)
             else:
                 if DEBUG:
