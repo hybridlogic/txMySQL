@@ -178,7 +178,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         elif field_count == 0xff:
             errno, sqlstate = yield t.unpack('<Hx5s')
             message = yield t.read_rest()
-            raise error.MySQLError(message, errno, sqlstate, self.query)
+            raise error.MySQLError(message, errno, sqlstate, self.debug_query)
         else:
             if t:
                 ret['extra'] = yield t.read_lcb()
