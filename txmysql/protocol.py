@@ -91,6 +91,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         self.ready_deferred.addErrback(log.err)
         self.factory = None
         self.setTimeout(idle_timeout)
+        self.debug_query = None
 
     @defer.inlineCallbacks
     def read_header(self):
@@ -177,7 +178,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         elif field_count == 0xff:
             errno, sqlstate = yield t.unpack('<Hx5s')
             message = yield t.read_rest()
-            raise error.MySQLError(message, errno, sqlstate)
+            raise error.MySQLError(message, errno, sqlstate, self.query)
         else:
             if t:
                 ret['extra'] = yield t.read_lcb()
@@ -323,6 +324,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     @operation
     def query(self, query):
         "A query with no response data"
+        self.debug_query = query
         with util.DataPacker(self) as p:
             p.write('\x03')
             p.write(query)
@@ -342,6 +344,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     @defer.inlineCallbacks
     def fetchall(self, query):
         #assert '\0' not in query, 'No NULs in your query, boy!'
+        self.debug_query = query
         result = yield self._prepare(query)
         types = yield self._execute(result['stmt_id'])
 
