@@ -32,6 +32,8 @@ TODO:
 
 EXAMPLE USAGE:
 
+import sys
+
 from twisted.internet import reactor, defer
 from twisted.python import log
 
