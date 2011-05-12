@@ -30,6 +30,17 @@ TODO:
     * Test against more than just the version of MySQL 5.1 which happened
       to be installed on my ThinkPad :-)
 
+
+WORKAROUNDS:
+
+There is no DateTime support yet but you can work around this by making MySQL
+cast the datetimes to a CHAR(19) like this:
+
+    SELECT CAST(datetime_field AS CHAR(19)) FROM table_name;
+
+Thanks to Dev0n for testing this.
+
+
 EXAMPLE USAGE:
 
 import sys
