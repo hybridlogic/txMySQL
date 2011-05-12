@@ -53,6 +53,10 @@ def example():
     def gotResult(data):
         print data
     d.addCallback(gotResult)
+    def handleFailure(reason):
+        # reason can be a MySQLError with message, errno, sqlstate, query
+        print reason
+    d.addErrback(handleFailure)
     return d
 
 if __name__ == "__main__":
