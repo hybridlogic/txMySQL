@@ -40,7 +40,7 @@ from txmysql import client
 log.startLogging(sys.stdout)
 
 def example():
-    conn = yield client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS,
+    conn = client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS,
             idle_timeout=120, connect_timeout=30)
     # This gets remembered and re-run if the connection needs reconnection
     d = conn.selectDb("foo")
