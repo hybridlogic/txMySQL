@@ -34,14 +34,27 @@ EXAMPLE USAGE:
 
 from twisted.internet import defer
 from txmysql import client
+from twisted.python import log
 
-@defer.inlineCallbacks
-def main():
+log.startLogging(sys.stdout)
+
+def example():
     c = yield client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS,
             idle_timeout=120, connect_timeout=30)
-    yield c.selectDb("foo") # This gets remembered and re-run if the connection needs reconnection
-    yield c.runOperation("insert into bar set baz='bash'")
-    data = yield c.runQuery("select * from bar")
+    d = c.selectDb("foo") # This gets remembered and re-run if the connection needs reconnection
+    def selectedDb(ignored):
+        return c.runOperation("insert into bar set baz='bash'")
+    d.addCallback(selectedDb)
+    def doneInsert(ignored):
+        return c.runQuery("select * from bar")
+    d.addCallback(doneInsert)
+    def gotResult(data):
+        print data
+    d.addCallback(gotResult)
+    return d
+
+if __name__ == "__main__":
+    example()
 
 
 SHAMELESS PLUG: 
