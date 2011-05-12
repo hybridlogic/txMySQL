@@ -55,7 +55,7 @@ def example():
     return d
 
 if __name__ == "__main__":
-    reactor.callLater(0, example)
+    reactor.callWhenRunning(example)
     reactor.run()
 
 
