@@ -32,9 +32,10 @@ TODO:
 
 EXAMPLE USAGE:
 
-from twisted.internet import defer
-from txmysql import client
+from twisted.internet import reactor, defer
 from twisted.python import log
+
+from txmysql import client
 
 log.startLogging(sys.stdout)
 
@@ -54,7 +55,8 @@ def example():
     return d
 
 if __name__ == "__main__":
-    example()
+    reactor.callLater(0, example)
+    reactor.run()
 
 
 SHAMELESS PLUG: 
