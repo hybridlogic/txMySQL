@@ -51,7 +51,7 @@ def example():
         return conn.runQuery("select * from bar")
     d.addCallback(doneInsert)
     def gotResult(data):
-        print data
+        print repr(data)
     d.addCallback(gotResult)
     def handleFailure(reason):
         # reason can be a MySQLError with message, errno, sqlstate, query
