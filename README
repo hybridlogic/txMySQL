@@ -40,14 +40,15 @@ from txmysql import client
 log.startLogging(sys.stdout)
 
 def example():
-    c = yield client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS,
+    conn = yield client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS,
             idle_timeout=120, connect_timeout=30)
-    d = c.selectDb("foo") # This gets remembered and re-run if the connection needs reconnection
+    # This gets remembered and re-run if the connection needs reconnection
+    d = conn.selectDb("foo")
     def selectedDb(ignored):
-        return c.runOperation("insert into bar set baz='bash'")
+        return conn.runOperation("insert into bar set baz='bash'")
     d.addCallback(selectedDb)
     def doneInsert(ignored):
-        return c.runQuery("select * from bar")
+        return conn.runQuery("select * from bar")
     d.addCallback(doneInsert)
     def gotResult(data):
         print data
