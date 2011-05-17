@@ -1,11 +1,8 @@
-from twisted.internet.protocol import ClientFactory, ReconnectingClientFactory
+from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.internet import reactor, defer
 from protocol import MySQLProtocol # One instance of this per actual connection to MySQL
-from txmysql import util, error
+from txmysql import error
 from twisted.python.failure import Failure
-from twisted.internet.error import TimeoutError
-from twisted.python import log
-import time
 
 DEBUG = False
 
