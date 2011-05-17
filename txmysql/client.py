@@ -331,6 +331,9 @@ class MySQLConnection(ReconnectingClientFactory):
             return data
         self.client.ready_deferred.addCallback(when_connected)
         def checkError(failure):
+            print "=" * 80
+            print " >>> Got to checkError, failure is", failure
+            print "=" * 80
             if failure.value.args[0] in self.temporary_error_strings:
                 print "CRITICAL: Found %s, reconnecting and retrying" % (failure.value.args[0])
                 self.client.transport.loseConnection()
