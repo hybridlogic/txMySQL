@@ -8,6 +8,7 @@ import struct
 from hashlib import sha1
 import sys
 import pprint
+import datetime
 
 typemap = {
     0x01: 1,
@@ -17,6 +18,7 @@ typemap = {
     0x05: 8,
     0x08: 8,
     0x09: 3,
+    0x0c: 8
 }
 
 def _xor(message1, message2):
@@ -162,6 +164,8 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
                             val, = struct.unpack('<f', val)
                         elif type == 5:
                             val, = struct.unpack('<d', val)
+                        elif type == 12:
+                            val = datetime.datetime(*struct.unpack("<xHBBBBB",val)).strftime('%Y-%m-%d %H:%M:%S')
                         else:
                             val = util.unpack_little_endian(val)
                         cols.append(val)
@@ -330,6 +334,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             p.write(query)
 
         ret = yield self.read_result()
+        defer.returnValue(ret)
     
     @operation
     def _close_stmt(self, stmt_id):
@@ -358,5 +363,3 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         #print "****************************** Got last result" 
         yield self._close_stmt(result['stmt_id'])
         defer.returnValue(all_rows)
-
-
