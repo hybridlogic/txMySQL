@@ -143,7 +143,6 @@ class MySQLConnection(ReconnectingClientFactory):
     def _retryOperation(self):
         if DEBUG:
             print "Running retryOperation on current operation %s" % str(self._current_operation)
-
         if not self._current_operation:
             # Oh, we weren't doing anything
             return
@@ -331,6 +330,12 @@ class MySQLConnection(ReconnectingClientFactory):
             self.stateTransition(state='connected')
             return data
         self.client.ready_deferred.addCallback(when_connected)
+        def checkError(failure):
+            if failure.value.args[0] in self.temporary_error_strings:
+                print "CRITICAL: Found %s, reconnecting and retrying" % (failure.value.args[0])
+                self.client.transport.loseConnection()
+                return # Terminate errback chain
+        self.client.ready_deferred.addErrback(checkError)
         self.resetDelay()
         return p
 
