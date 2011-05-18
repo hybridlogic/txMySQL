@@ -325,7 +325,20 @@ class MySQLClientTest(unittest.TestCase):
         result = yield d
         self.assertEquals(result, [[1]])
         conn.disconnect()
-    
+   
+    @defer.inlineCallbacks
+    def test_0700_error_strings_during_connection_phase(self):
+        yield self._start_mysql()
+        conn = self._connect_mysql(retry_on_error=True,
+            temporary_error_strings=[
+                "Unknown database 'databasewhichdoesnotexist'",
+            ], database='databasewhichdoesnotexist')
+
+        yield conn.runQuery("select * from foo")
+
+    test_0700_error_strings_during_connection_phase.skip = 'Use in debugging, never passes'
+
+
     # Utility functions:
 
     def _stop_mysql(self):
@@ -354,4 +367,7 @@ class MySQLClientTest(unittest.TestCase):
         reactor.disconnectAll()
 
     def _connect_mysql(self, **kw):
-        return client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, 'foo', **kw)
+        if 'database' in kw:
+            return client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, **kw)
+        else:
+            return client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, 'foo', **kw)

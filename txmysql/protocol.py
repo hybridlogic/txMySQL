@@ -1,14 +1,15 @@
-from twisted.internet import defer, reactor
+from twisted.internet import defer
 from twisted.protocols.policies import TimeoutMixin
 from twisted.python import log
 from qbuf.twisted_support import MultiBufferer, MODE_STATEFUL
-from twisted.internet.protocol import ClientFactory, ReconnectingClientFactory, Protocol
+from twisted.internet.protocol import Protocol
 from txmysql import util, error
 import struct
 from hashlib import sha1
 import sys
-import pprint
+#import pprint
 import datetime
+from twisted.python.failure import Failure
 
 typemap = {
     0x01: 1,
@@ -90,7 +91,6 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         self.ready_deferred = defer.Deferred()
         self._operations = []
         self._current_operation = None
-        self.ready_deferred.addErrback(log.err)
         self.factory = None
         self.setTimeout(idle_timeout)
         self.debug_query = None
@@ -223,9 +223,9 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     def connectionMade(self):
         d = self.do_handshake()
         def done_handshake(data):
-            self.ready_deferred.callback(data)
+            self.ready_deferred.callback(data) # Handles errbacks too
             self.ready_deferred = defer.Deferred()
-        d.addCallback(done_handshake)
+        d.addBoth(done_handshake)
     
     def _update_operations(self, _result=None):
         if self._operations:
@@ -251,7 +251,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         self.resetTimeout()
         t = yield self.read_header()
         protocol_version, = yield t.unpack('<B')
-        server_version = yield t.read_cstring()
+        yield t.read_cstring() # server_version
         thread_id, scramble_buf = yield t.unpack('<I8sx')
         capabilities, language, status = yield t.unpack('<HBH')
         #print hex(capabilities)

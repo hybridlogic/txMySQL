@@ -3,6 +3,7 @@ from twisted.internet import reactor, defer
 from protocol import MySQLProtocol # One instance of this per actual connection to MySQL
 from txmysql import error
 from twisted.python.failure import Failure
+import pprint
 
 DEBUG = False
 
@@ -154,7 +155,7 @@ class MySQLConnection(ReconnectingClientFactory):
             if isinstance(data, Failure):
                 if data.check(error.MySQLError):
                     if data.value.args[0] in self.temporary_error_strings:
-                        print "CRITICAL: Found %s, reconnecting and retrying" % (data.value.args[0])
+                        print "CRITICAL: Caught '%s', reconnecting and retrying" % (data.value.args[0])
                         self.client.transport.loseConnection()
                         return
                 if DEBUG:
@@ -297,7 +298,11 @@ class MySQLConnection(ReconnectingClientFactory):
             self.stateTransition(state='connecting')
             # TODO: Use UNIX socket if string is "localhost"
             reactor.connectTCP(self.hostname, self.port, self, timeout=self.connect_timeout)
+            if DEBUG:
+                print "Yielding on a successful connection, deferred is %s" % self.deferred
             yield self.deferred # will set self.client
+            if DEBUG:
+                print "Yielding on a successful ready deferred which is", self.client.ready_deferred
             yield self.client.ready_deferred
         elif self.state == 'connecting':
             if DEBUG:
@@ -326,20 +331,21 @@ class MySQLConnection(ReconnectingClientFactory):
         self.deferred = defer.Deferred()
         def when_connected(data):
             if DEBUG:
-                print "Connection just successfully made, and MySQL handshake/auth completed. About to transition to connected..."
+                print "Connection just successfully made, and MySQL handshake/auth completed. About to transition to connected... (got data)", data
             self.stateTransition(state='connected')
             return data
         self.client.ready_deferred.addCallback(when_connected)
         def checkError(failure):
             if failure.check(error.MySQLError):
-                print "=" * 80
-                print " >>> Got to checkError, failure is", failure
-                print "=" * 80
                 if failure.value.args[0] in self.temporary_error_strings:
-                    print "CRITICAL: Found %s, reconnecting and retrying" % (failure.value.args[0])
+                    print "CRITICAL: Caught '%s', reconnecting and retrying" % (failure.value.args[0])
                     self.client.transport.loseConnection()
                     return # Terminate errback chain
             return failure
+        if DEBUG:
+            print " *** Attaching checkError to client.ready_deferred", self.client.ready_deferred
+            print "current ready_deferred callbacks are"
+            pprint.pprint(self.client.ready_deferred.callbacks)
         self.client.ready_deferred.addErrback(checkError)
         self.resetDelay()
         return p
