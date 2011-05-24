@@ -31,6 +31,7 @@ TODO:
 
     * Transaction support
     * Stored queries
+    * Connection pool
     * DBAPI support - see http://www.python.org/dev/peps/pep-0249/
     * Test against more than just the version of MySQL 5.1 which happened
       to be installed on my ThinkPad :-)
