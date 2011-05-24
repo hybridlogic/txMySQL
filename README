@@ -29,8 +29,8 @@ NEW FEATURES:
 
 TODO:
 
-    * Iterator protocol for iterating over large results sets, lazily
-      loaded as they come back from the server
+    * Transaction support
+    * Stored queries
     * DBAPI support - see http://www.python.org/dev/peps/pep-0249/
     * Test against more than just the version of MySQL 5.1 which happened
       to be installed on my ThinkPad :-)
