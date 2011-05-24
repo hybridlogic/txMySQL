@@ -10,7 +10,7 @@ PREREQUISITES:
 
 NEW FEATURES:
     * MySQL DATETIME fields now show up correctly (XXXX-XX-XX XX:XX:XX).
-    * When a runOperation is called, the deffered now returns the a dictionary
+    * When a runOperation is called, the deferred now returns the a dictionary
       with the following:
         - {'insert_id': int, 'affected_rows': int, 'message': str,
            'warning_count': int, 'server_status': int}
