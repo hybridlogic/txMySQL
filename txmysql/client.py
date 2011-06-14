@@ -237,7 +237,7 @@ class MySQLConnection(ReconnectingClientFactory):
             # it now
             if self._current_operation and self._error_condition:
                 if self.retry_on_error:
-                    print "Would have run retry here..."
+                    print "Would have run retry here... %r" % (reason,)
                     if DEBUG:
                         print "Retrying on error %s, with current operation %s" % (str(reason), str(self._current_operation))
                     # Retry the current operation
