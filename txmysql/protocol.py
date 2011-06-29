@@ -9,7 +9,6 @@ from hashlib import sha1
 import sys
 #import pprint
 import datetime
-from twisted.python.failure import Failure
 
 typemap = {
     0x01: 1,
@@ -165,7 +164,14 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
                         elif type == 5:
                             val, = struct.unpack('<d', val)
                         elif type == 12:
-                            val = datetime.datetime(*struct.unpack("<xHBBBBB",val)).strftime('%Y-%m-%d %H:%M:%S')
+                            try:
+                                val = datetime.datetime(*struct.unpack("<xHBBBBB",val)).strftime('%Y-%m-%d %H:%M:%S')
+                            except Exception, e:
+                                print "CRITICAL: Caught exception in txmysql when trying",
+                                print "to decode datetime value %r" % (val,),
+                                print "exception follows, returning None to application",
+                                print e
+                                val = None
                         else:
                             val = util.unpack_little_endian(val)
                         cols.append(val)
