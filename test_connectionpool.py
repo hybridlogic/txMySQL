@@ -1,9 +1,6 @@
 import sys
 
-#import tornado.platform.twistedreactor
-#tornado.platform.twistedreactor.install()
 from twisted.internet import reactor
-
 from twisted.python import log
 
 from txmysql import client
