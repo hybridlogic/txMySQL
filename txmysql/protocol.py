@@ -314,6 +314,11 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         rows = []
         while True:
             result = yield self.read_result(data_types=types)
+            # TODO: We should check whether this result indicates that there
+            # are no rows for us to fetch; then rather than hanging forever we
+            # should immediately return to the application code.  Perhaps one
+            # of read_result's cases will already cover this eventuality and we
+            # can just inspect it here.
             if result.get('is_eof'):
                 more_rows = not result['flags'] & 128
                 break
@@ -328,7 +333,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             p.write('\x02')
             p.write(database)
         
-        result = yield self.read_result()
+        yield self.read_result()
 
     
     @operation
@@ -369,3 +374,5 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
         #print "****************************** Got last result" 
         yield self._close_stmt(result['stmt_id'])
         defer.returnValue(all_rows)
+
+
