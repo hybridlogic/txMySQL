@@ -4,6 +4,7 @@ from protocol import MySQLProtocol # One instance of this per actual connection 
 from txmysql import error
 from twisted.python.failure import Failure
 import pprint
+import functools
 
 DEBUG = False
 
@@ -54,7 +55,7 @@ class MySQLConnection(ReconnectingClientFactory):
     """
 
     protocol = MySQLProtocol
-    
+
     def disconnect(self):
         """
         Close the connection and kill all the reconnection attempts
@@ -67,8 +68,9 @@ class MySQLConnection(ReconnectingClientFactory):
             self.client.transport.loseConnection()
 
     def __init__(self, hostname, username, password, database=None,
-            connect_timeout=None, query_timeout=None, idle_timeout=None,
-            retry_on_error=False, temporary_error_strings=[], port=3306):
+                 connect_timeout=None, query_timeout=None, idle_timeout=None,
+                 retry_on_error=False, temporary_error_strings=[], port=3306,
+                 pool=None):
 
         self.hostname = hostname
         self.port = port
@@ -87,7 +89,9 @@ class MySQLConnection(ReconnectingClientFactory):
         self.state = 'disconnected'
         self.client = None # Will become an instance of MySQLProtocol
                            # precisely when we have a live connection
- 
+
+        self.pool = pool
+
         # Attributes relating to the queue
         self._pending_operations = []
         self._current_operation = None
@@ -118,7 +122,7 @@ class MySQLConnection(ReconnectingClientFactory):
 
     def runOperation(self, query, query_args=None):
         return self._handleIncomingRequest('operation', self._doOperation, query, query_args)
-    
+
     def selectDb(self, db):
         self.database = db
         return self._handleIncomingRequest('selectDb', self._doSelectDb, db, None)
@@ -126,11 +130,11 @@ class MySQLConnection(ReconnectingClientFactory):
     def _executeCurrentOperation(self):
         # Actually execute it, operation_dfr will fire when the database returns
         user_dfr, func, query, query_args = self._current_operation
-        
+
         if DEBUG:
             print "Setting current operation to %s" % str(self._current_operation)
             print "About to run %s(%s, %s) and fire back on %s" % (str(func), str(query), str(query_args), str(user_dfr))
-        
+
         self._current_user_dfr = user_dfr
         operation_dfr = func(query, query_args)
         # Store a reference to the current operation (there's gonna be only one running at a time)
@@ -169,6 +173,8 @@ class MySQLConnection(ReconnectingClientFactory):
                 if DEBUG:
                     print "Query is done with result %s, firing back on %s" % (data, self._current_user_dfr)
                 self._current_user_dfr.callback(data)
+                if self.pool:
+                    self.pool._doneQuery(self)
             self._current_user_dfr = None
         else:
             print "CRITICAL WARNING! Current user deferred was None when a query fired back with %s - there should always be a user deferred to fire the response to..." % data
@@ -205,15 +211,15 @@ class MySQLConnection(ReconnectingClientFactory):
 
         if DEBUG:
             print "Transition from %s to %s" % (self.state, new_state)
-        
+
         self.state = new_state
-        
+
         # connected => not connected
         if old_state == 'connected' and new_state != 'connected':
             if DEBUG:
                 print "We are disconnecting..."
             # We have just lost a connection, if we're in the middle of
-            # something, send an errback, unless we're going to retry 
+            # something, send an errback, unless we're going to retry
             # on reconnect, in which case do nothing
             if not self.retry_on_error and self._current_operation:
                 if DEBUG:
@@ -250,13 +256,13 @@ class MySQLConnection(ReconnectingClientFactory):
                 else:
                     if DEBUG:
                         print "Not retrying on error, connection made, nothing to do."
-           
+
             else:
                 # We may have something in our queue which was waiting until we became connected
                 if DEBUG:
                     print "Connected, check whether we have any operations to perform"
                 self._checkOperations()
-        
+
         return data
 
     def _handleConnectionError(self, reason, is_failed):
@@ -284,13 +290,13 @@ class MySQLConnection(ReconnectingClientFactory):
             print "Got clientConnectionFailed for reason %s" % str(reason)
         self._handleConnectionError(reason, is_failed=True)
         ReconnectingClientFactory.clientConnectionFailed(self, connector, reason)
-    
+
     def clientConnectionLost(self, connector, reason):
         if DEBUG:
             print "Got clientConnectionLost for reason %s" % str(reason)
         self._handleConnectionError(reason, is_failed=False)
         ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-    
+
     @defer.inlineCallbacks
     def _begin(self):
         if self.state == 'disconnected':
@@ -316,7 +322,7 @@ class MySQLConnection(ReconnectingClientFactory):
             if DEBUG:
                 print "Already connected when a query was attempted, well that was easy"
             pass
-    
+
     def buildProtocol(self, addr):
         if DEBUG:
             print "Building a new MySQLProtocol instance for connection to %s, attempting to connect, using idle timeout %s" % (addr, self.idle_timeout)
@@ -354,7 +360,7 @@ class MySQLConnection(ReconnectingClientFactory):
     @defer.inlineCallbacks
     def _doQuery(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "Attempting an actual query \"%s\"" % _escape(query, query_args) 
+            print "Attempting an actual query \"%s\"" % _escape(query, query_args)
         yield self._begin()
         result = yield self.client.fetchall(_escape(query, query_args))
         defer.returnValue(result)
@@ -373,3 +379,91 @@ class MySQLConnection(ReconnectingClientFactory):
             print "Attempting an actual selectDb \"%s\"" % db
         yield self._begin()
         yield self.client.select_db(db)
+
+
+class DeferredConnection:
+    def __init__(self, pool):
+        self._pool = pool
+        self._deferred = defer.Deferred()
+        self._deferred.addCallback(self._useConnection)
+
+    def _useConnection(self, conn):
+        return conn
+
+    def runQuery(self, query, query_args=None):
+        def _runQuery(c):
+            return c.runQuery(query, query_args)
+        self._deferred.addCallback(_runQuery)
+        return self._deferred
+
+    def runOperation(self, query, query_args=None):
+        def _runOperation(c):
+            return c.runOperation(query, query_args)
+        self._deferred.addCallback(_runOperation)
+        return self._deferred
+
+    def selectDb(self, db):
+        self._deferred.addCallback(lambda conn: conn.selectDb(db))
+        return self._deferred
+
+class ConnectionPool:
+    """
+    Represents a pool of connections to MySQL.
+    """
+
+    def __init__(self, hostname=None, username=None, password=None,
+                 database=None,
+                 num_connections=5, connect_timeout=None,
+                 query_timeout=None, idle_timeout=None, retry_on_error=False,
+                 temporary_error_strings=[], port=3306):
+        # Connections in the pool that can be used to run queries
+        self._unused_connections = []
+
+        # Deferred connections whose execution is postponed until a
+        # database connection becomes available.
+        self._deferred_connections = []
+
+        for i in xrange(0, num_connections):
+            conn = MySQLConnection(hostname, username, password, database,
+                                   connect_timeout, query_timeout,
+                                   idle_timeout, retry_on_error,
+                                   temporary_error_strings, port,
+                                   self)
+            self._unused_connections.append(conn)
+
+    def _doneQuery(self, conn):
+        """Called when a connection becomes available."""
+        if self._deferred_connections:
+            # If we have deferred connections, pick up the oldest one and
+            # run it on the newly available connection.
+            defconn = self._deferred_connections.pop(0)
+            defconn._deferred.callback(conn)
+        else:
+            # Otherwise just return the connection in the list of
+            # available connections.
+            self._unused_connections.append(conn)
+
+    def _getConnection(self):
+        if self._unused_connections:
+            # If we have available connections return one
+            conn = self._unused_connections.pop()
+            return conn
+        else:
+            # Otherwise create a deferred connection which will be
+            # executed when a connection from the pool becomes
+            # available.
+            defconn = DeferredConnection(self)
+            self._deferred_connections.append(defconn)
+            return defconn
+
+    def runQuery(self, query, query_args=None):
+        conn = self._getConnection()
+        return conn.runQuery(query, query_args)
+
+    def runOperation(self, query, query_args=None):
+        conn = self._getConnection()
+        return conn.runOperation(query, query_args)
+
+    def selectDb(self, db):
+        conn = self._getConnection()
+        return conn.selectDb(db)
