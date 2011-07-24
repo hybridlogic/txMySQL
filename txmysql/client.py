@@ -8,6 +8,7 @@ import pprint
 DEBUG = False
 
 def _escape(query, args=None): # XXX: Add Rob's suggestion for escaping
+    # TODO: Turn %% into % so that you can do a real %s
     if args is None:
         return query
     escaped_args = []
