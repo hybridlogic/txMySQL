@@ -337,14 +337,18 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
 
     
     @operation
-    def query(self, query):
+    def query(self, query, read_result=False):
         "A query with no response data"
         self.debug_query = query
         with util.DataPacker(self) as p:
             p.write('\x03')
             p.write(query)
 
-        ret = yield self.read_result()
+	if read_result:
+		# TODO _do_fetch needs a statement id right now :(
+		ret = self._do_fetch()
+	else:
+		ret = yield self.read_result()
         defer.returnValue(ret)
     
     @operation
@@ -361,17 +365,28 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     def fetchall(self, query):
         #assert '\0' not in query, 'No NULs in your query, boy!'
         self.debug_query = query
+	print 'about to prepare'
         result = yield self._prepare(query)
+	print 'finished prepare'
         types = yield self._execute(result['stmt_id'])
+	print '!' * 20, 'fetchall got past execute!'
+	all_rows = yield self._do_fetch()
+	defer.returnValue(all_rows)
 
+
+    @defer.inlineCallbacks
+    def _do_fetch(self):
         all_rows = []
         while True:
+            print 'going to fetch some results'
             rows, more_rows = yield self._fetch(result['stmt_id'], 2, types)
+	    print 'got some rows', rows
             for row in rows:
                 all_rows.append(row['cols'])
             if not more_rows:
+                print 'all done'
                 break
-        #print "****************************** Got last result" 
+        print "****************************** Got last result" 
         yield self._close_stmt(result['stmt_id'])
         defer.returnValue(all_rows)
 

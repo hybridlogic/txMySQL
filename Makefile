@@ -12,3 +12,8 @@ trialtests: export PYTHONPATH:= txmysql:test
 trialtests:
 	mkdir -p _logs_temp
 	trial --rterrors test.test_txmysql.MySQLClientTest
+
+keyerror: export PYTHONPATH:= txmysql:test
+keyerror:
+	mkdir -p _logs_temp
+	trial --rterrors test.test_txmysql.MySQLClientTest.test_0900_autoRepairKeyError
