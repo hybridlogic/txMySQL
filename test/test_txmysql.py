@@ -8,7 +8,9 @@ evil daemon which absorbs packets.
 TODO: Check code coverage for every line, then manually any compound expression
 in a conditional to check that there is test case coverage for each case.
 """
+import os
 
+from twisted.python.filepath import FilePath
 from twisted.trial import unittest
 from twisted.internet import defer, reactor
 from twisted.internet.base import DelayedCall
@@ -337,6 +339,23 @@ class MySQLClientTest(unittest.TestCase):
         yield conn.runQuery("select * from foo")
 
     test_0700_error_strings_during_connection_phase.skip = 'Use in debugging, never passes'
+
+
+    def test_0900_autoRepairKeyError(self):
+        """
+        
+        """
+        yield AsyncExecCmds(['/opt/HybridCluster/init.d/mysqld stop'])
+        sampleBadDataPath = FilePath(__file__).sibling('bad-data')
+        target = FilePath('/var/db/mysql/autorepair')
+        target.remove()
+        sampleBadDataPath.copyTo(target)
+        passwordEntry = pwd.getpwnam('mysql')
+        for path in sampleBadDataPath.walk():
+            os.chown(path.path, passwordEntry.pw_uid, passwordEntry.pw_gid)
+        yield AsyncExecCmds(['/opt/HybridCluster/init.d/mysqld start'])
+        return client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, port=3307,
+                                      autoRepair=True)
 
 
     # Utility functions:
