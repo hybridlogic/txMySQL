@@ -4,9 +4,8 @@ from protocol import MySQLProtocol # One instance of this per actual connection 
 from txmysql import error
 from twisted.python.failure import Failure
 import pprint
-import functools
 
-DEBUG = True
+DEBUG = False
 
 def _escape(query, args=None): # XXX: Add Rob's suggestion for escaping
     # TODO: Turn %% into % so that you can do a real %s

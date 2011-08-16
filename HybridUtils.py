@@ -1,7 +1,6 @@
 import time
 import re
 import os
-import socket
 import sys
 import pprint
 import inspect
@@ -10,9 +9,6 @@ from twisted.internet import protocol,reactor,defer
 from twisted.spread import pb
 from twisted.internet import abstract,fdesc,threads
 from twisted.python import log, failure
-from twisted.python.util import untilConcludes
-from twisted.enterprise import adbapi 
-from MySQLdb import OperationalError, ProgrammingError
 from collections import defaultdict
 
 from twisted.web.client import Agent

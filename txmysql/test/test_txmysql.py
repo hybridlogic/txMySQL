@@ -7,6 +7,9 @@ evil daemon which absorbs packets.
 
 TODO: Check code coverage for every line, then manually any compound expression
 in a conditional to check that there is test case coverage for each case.
+
+Please CREATE DATABASE foo and grant the appropriate credentials before running
+this test suite.
 """
 import os, pwd, sys
 from errno import ENOENT
@@ -147,15 +150,18 @@ class MySQLClientTest(unittest.TestCase):
     @defer.inlineCallbacks
     def test_0050_test_initial_database_selection(self):
         """
-        1. Start MySQL
-        2. Connect
-        3. Query - check result
+        Check that when we connect to a database in the initial handshake, we
+        end up in the 'foo' database. TOOD: Check that we're actually in the
+        'foo' database somehow.
         """
         yield self._start_mysql()
-        conn = self._connect_mysql()
-        result = yield conn.runQuery("select * from foo")
+        conn = self._connect_mysql(database='foo')
+        result = yield conn.runOperation("create table if not exists foo (id int primary key)")
+        result = yield conn.runOperation("delete from foo.foo")
+        result = yield conn.runOperation("insert into foo.foo set id=191919")
+        result = yield conn.runQuery("select * from foo order by id desc limit 1")
         conn.disconnect()
-        self.assertEquals(result, [[1]])
+        self.assertEquals(result, [[191919]])
 
     @defer.inlineCallbacks
     def test_0100_start_connect_query(self):
@@ -413,3 +419,5 @@ class MySQLClientTest(unittest.TestCase):
             return client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, **kw)
         else:
             return client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, 'foo', **kw)
+
+
