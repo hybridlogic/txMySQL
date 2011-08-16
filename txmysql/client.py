@@ -6,7 +6,7 @@ from twisted.python.failure import Failure
 import pprint
 import functools
 
-DEBUG = False
+DEBUG = True
 
 def _escape(query, args=None): # XXX: Add Rob's suggestion for escaping
     # TODO: Turn %% into % so that you can do a real %s
@@ -70,7 +70,7 @@ class MySQLConnection(ReconnectingClientFactory):
     def __init__(self, hostname, username, password, database=None,
                  connect_timeout=None, query_timeout=None, idle_timeout=None,
                  retry_on_error=False, temporary_error_strings=[], port=3306,
-                 pool=None):
+                 pool=None, autoRepair=False):
 
         self.hostname = hostname
         self.port = port
@@ -85,6 +85,7 @@ class MySQLConnection(ReconnectingClientFactory):
         self.deferred = defer.Deferred() # This gets fired when we have a new
                                          # client which just got connected
         self._current_selected_db = None
+        self._autoRepair = autoRepair
 
         self.state = 'disconnected'
         self.client = None # Will become an instance of MySQLProtocol
@@ -154,11 +155,29 @@ class MySQLConnection(ReconnectingClientFactory):
             return
         self._executeCurrentOperation()
 
+    @defer.inlineCallbacks
     def _doneQuery(self, data):
         # The query deferred has fired
         if self._current_user_dfr:
             if isinstance(data, Failure):
                 if data.check(error.MySQLError):
+                    if data.value.args[0] in self.temporary_error_strings:
+                        print "CRITICAL: Caught '%s', reconnecting and retrying" % (data.value.args[0])
+                        self.client.transport.loseConnection()
+                        return
+                    """("Incorrect key file for table './autorepair/mailaliases.MYI'; try to repair it", 126, 'HY000', "select id from mailaliases where username='iceshaman@gmail.com' and deletedate is null")"""
+                    error_string = data.value.args[0]
+                    keyCorruptionPrefix = 'Incorrect key file for table \'./'
+                    if error_string.startswith(keyCorruptionPrefix) and self._autoRepair:
+                        start = len(keyCorruptionPrefix)
+                        dbfile = error_string[start:error_string.find("'", start)]
+                        table = dbfile.rsplit('/', 1)[1].rsplit('.', 1)[0]
+                        repair = "repair table " + table
+                        print 'about to repair table:', repr(repair)
+                        print ('repair table resulted in', (yield self.client.query(repair)))
+                        self._executeCurrentOperation()
+                        return
+
                     if data.value.args[0] in self.temporary_error_strings:
                         print "CRITICAL: Caught '%s', reconnecting and retrying" % (data.value.args[0])
                         self.client.transport.loseConnection()
@@ -306,14 +325,24 @@ class MySQLConnection(ReconnectingClientFactory):
             # TODO: Use UNIX socket if string is "localhost"
             reactor.connectTCP(self.hostname, self.port, self, timeout=self.connect_timeout)
             if DEBUG:
-                print "Yielding on a successful connection, deferred is %s" % self.deferred
-            yield self.deferred # will set self.client
+                print "(1) Yielding on a successful connection, deferred is %s" % self.deferred
+            d = self.deferred # will set self.client
+            def printThing(err):
+                print 'THING2' * 50
+                return err
+            d.addErrback(printThing)
+            yield d
             if DEBUG:
                 print "Yielding on a successful ready deferred which is", self.client.ready_deferred
-            yield self.client.ready_deferred
+            d = self.client.ready_deferred
+            def printThing(err):
+                print 'THING' * 50
+                return err
+            d.addErrback(printThing)
+            yield d
         elif self.state == 'connecting':
             if DEBUG:
-                print "Yielding on a successful connection, deferred is %s" % self.deferred
+                print "(2) Yielding on a successful connection, deferred is %s" % self.deferred
             yield self.deferred
             if DEBUG:
                 print "Yielding on a successful ready deferred"
@@ -362,7 +391,11 @@ class MySQLConnection(ReconnectingClientFactory):
         if DEBUG:
             print "Attempting an actual query \"%s\"" % _escape(query, query_args)
         yield self._begin()
+        if DEBUG:
+            print "Finished issuing query, fetching all results"
         result = yield self.client.fetchall(_escape(query, query_args))
+        if DEBUG:
+            print "Fetched %d results" % (len(result),)
         defer.returnValue(result)
 
     @defer.inlineCallbacks

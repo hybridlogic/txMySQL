@@ -344,7 +344,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             p.write('\x03')
             p.write(query)
 
-	if read_result:
+	if False and read_result:
 		# TODO _do_fetch needs a statement id right now :(
 		ret = self._do_fetch()
 	else:
@@ -370,12 +370,12 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
 	print 'finished prepare'
         types = yield self._execute(result['stmt_id'])
 	print '!' * 20, 'fetchall got past execute!'
-	all_rows = yield self._do_fetch()
+	all_rows = yield self._do_fetch(result, types)
 	defer.returnValue(all_rows)
 
 
     @defer.inlineCallbacks
-    def _do_fetch(self):
+    def _do_fetch(self, result, types):
         all_rows = []
         while True:
             print 'going to fetch some results'

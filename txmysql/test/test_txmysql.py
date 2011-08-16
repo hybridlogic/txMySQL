@@ -8,7 +8,7 @@ evil daemon which absorbs packets.
 TODO: Check code coverage for every line, then manually any compound expression
 in a conditional to check that there is test case coverage for each case.
 """
-import os, pwd
+import os, pwd, sys
 from errno import ENOENT
 
 from twisted.python.filepath import FilePath
@@ -21,6 +21,16 @@ DelayedCall.debug = False
 from txmysql import client
 from HybridUtils import AsyncExecCmds, sleep
 import secrets
+
+if 'freebsd' in sys.platform:
+    onFreeBSD = True
+    skipReason = "Test only works on Ubuntu"
+else:
+    onFreeBSD = False
+    skipReason = "Test only works on FreeBSD"
+
+FREEBSD_TESTS = []
+
 
 class MySQLClientTest(unittest.TestCase):
 
@@ -363,7 +373,8 @@ class MySQLClientTest(unittest.TestCase):
         conn = client.MySQLConnection('127.0.0.1', 'root', secrets.MYSQL_ROOT_PASS, 'autorepair',
                                       port=3307, autoRepair=True)
         yield conn.runQuery("select id from mailaliases where username='iceshaman@gmail.com' and deletedate is null")
-
+        conn.disconnect()
+    FREEBSD_TESTS.append(test_0900_autoRepairKeyError.__name__)
 
     # Utility functions:
 
@@ -384,6 +395,11 @@ class MySQLClientTest(unittest.TestCase):
         """
         Stop MySQL before each test
         """
+        name = self._testMethodName
+        if onFreeBSD and name not in FREEBSD_TESTS:
+            raise unittest.SkipTest("%r only runs on FreeBSD" % (name,))
+        elif not onFreeBSD and name in FREEBSD_TESTS:
+            raise unittest.SkipTest("%r does not run on FreeBSD" % (name,))
         return self._stop_mysql()
 
     def tearDown(self):
