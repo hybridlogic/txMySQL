@@ -22,27 +22,27 @@ typemap = {
 }
 
 def _xor(message1, message2):
-	length = len(message1)
-	result = ''
-	for i in xrange(length):
-		x = (struct.unpack('B', message1[i:i+1])[0] ^ struct.unpack('B', message2[i:i+1])[0])
-		result += struct.pack('B', x)
-	return result
+        length = len(message1)
+        result = ''
+        for i in xrange(length):
+                x = (struct.unpack('B', message1[i:i+1])[0] ^ struct.unpack('B', message2[i:i+1])[0])
+                result += struct.pack('B', x)
+        return result
 
 def dump_packet(data):
-	def is_ascii(data):
-		if data.isalnum():
-			return data
-		return '.'
-	print "packet length %d" % len(data)
-	print "method call: %s \npacket dump" % sys._getframe(2).f_code.co_name
-	print "-" * 88
-	dump_data = [data[i:i+16] for i in xrange(len(data)) if i%16 == 0]
-	for d in dump_data:
-		print ' '.join(map(lambda x:"%02X" % ord(x), d)) + \
-				'   ' * (16 - len(d)) + ' ' * 2 + ' '.join(map(lambda x:"%s" % is_ascii(x), d))
-	print "-" * 88
-	print ""
+        def is_ascii(data):
+                if data.isalnum():
+                        return data
+                return '.'
+        print "packet length %d" % len(data)
+        print "method call: %s \npacket dump" % sys._getframe(2).f_code.co_name
+        print "-" * 88
+        dump_data = [data[i:i+16] for i in xrange(len(data)) if i%16 == 0]
+        for d in dump_data:
+                print ' '.join(map(lambda x:"%02X" % ord(x), d)) + \
+                                '   ' * (16 - len(d)) + ' ' * 2 + ' '.join(map(lambda x:"%s" % is_ascii(x), d))
+        print "-" * 88
+        print ""
 
 def operation(func):
     func = defer.inlineCallbacks(func)
@@ -344,11 +344,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             p.write('\x03')
             p.write(query)
 
-	if False and read_result:
-		# TODO _do_fetch needs a statement id right now :(
-		ret = self._do_fetch()
-	else:
-		ret = yield self.read_result()
+        ret = yield self.read_result()
         defer.returnValue(ret)
     
     @operation
@@ -365,28 +361,28 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
     def fetchall(self, query):
         #assert '\0' not in query, 'No NULs in your query, boy!'
         self.debug_query = query
-	print 'about to prepare'
+        #print 'about to prepare'
         result = yield self._prepare(query)
-	print 'finished prepare'
+        #print 'finished prepare'
         types = yield self._execute(result['stmt_id'])
-	print '!' * 20, 'fetchall got past execute!'
-	all_rows = yield self._do_fetch(result, types)
-	defer.returnValue(all_rows)
+        #print '!' * 20, 'fetchall got past execute!'
+        all_rows = yield self._do_fetch(result, types)
+        defer.returnValue(all_rows)
 
 
     @defer.inlineCallbacks
     def _do_fetch(self, result, types):
         all_rows = []
         while True:
-            print 'going to fetch some results'
+            #print 'going to fetch some results'
             rows, more_rows = yield self._fetch(result['stmt_id'], 2, types)
-	    print 'got some rows', rows
+            #print 'got some rows', rows
             for row in rows:
                 all_rows.append(row['cols'])
             if not more_rows:
-                print 'all done'
+                #print 'all done'
                 break
-        print "****************************** Got last result" 
+        #print "****************************** Got last result" 
         yield self._close_stmt(result['stmt_id'])
         defer.returnValue(all_rows)
 
