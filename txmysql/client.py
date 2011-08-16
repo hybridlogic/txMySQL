@@ -3,6 +3,7 @@ from twisted.internet import reactor, defer
 from protocol import MySQLProtocol # One instance of this per actual connection to MySQL
 from txmysql import error
 from twisted.python.failure import Failure
+from twisted.python import log
 import pprint
 
 DEBUG = False
@@ -172,8 +173,13 @@ class MySQLConnection(ReconnectingClientFactory):
                         dbfile = error_string[start:error_string.find("'", start)]
                         table = dbfile.rsplit('/', 1)[1].rsplit('.', 1)[0]
                         repair = "repair table " + table
-                        print 'about to repair table:', repr(repair)
-                        print ('repair table resulted in', (yield self.client.query(repair)))
+                        log.msg(
+                            channel="autorepair",
+                            msgs=[error_string, "\n\tabout to repair", repr(repair)])
+                        result = yield self.client.query(repair)
+                        log.msg(
+                            channel="autorepair",
+                            msgs=["repair completed", repr(result)])
                         self._executeCurrentOperation()
                         return
 
