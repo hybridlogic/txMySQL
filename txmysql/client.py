@@ -325,20 +325,10 @@ class MySQLConnection(ReconnectingClientFactory):
             reactor.connectTCP(self.hostname, self.port, self, timeout=self.connect_timeout)
             if DEBUG:
                 print "(1) Yielding on a successful connection, deferred is %s" % self.deferred
-            d = self.deferred # will set self.client
-            def printThing(err):
-                print 'THING2' * 50
-                return err
-            d.addErrback(printThing)
-            yield d
+            yield self.deferred # will set self.client
             if DEBUG:
                 print "Yielding on a successful ready deferred which is", self.client.ready_deferred
-            d = self.client.ready_deferred
-            def printThing(err):
-                print 'THING' * 50
-                return err
-            d.addErrback(printThing)
-            yield d
+            yield self.client.ready_deferred
         elif self.state == 'connecting':
             if DEBUG:
                 print "(2) Yielding on a successful connection, deferred is %s" % self.deferred
