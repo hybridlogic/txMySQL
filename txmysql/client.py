@@ -165,11 +165,18 @@ class MySQLConnection(ReconnectingClientFactory):
                         print "CRITICAL: Caught '%s', reconnecting and retrying" % (data.value.args[0])
                         self.client.transport.loseConnection()
                         return
-                    """("Incorrect key file for table './autorepair/mailaliases.MYI'; try to repair it", 126, 'HY000', "select id from mailaliases where username='iceshaman@gmail.com' and deletedate is null")"""
+                    """
+                    Incorrect key file for table './autorepair/mailaliases.MYI'; try to repair it", 126, 'HY000'
+                    Table './hybridcluster/filesystem_modification_counts' is marked as crashed and last (automatic?) repair failed", 144, 'HY000'
+                    """
                     error_string = data.value.args[0]
                     keyCorruptionPrefix = 'Incorrect key file for table \'./'
+                    start = None
                     if error_string.startswith(keyCorruptionPrefix) and self._autoRepair:
                         start = len(keyCorruptionPrefix)
+                    elif "is marked as crashed and last (automatic?) repair failed" in error_string and self._autoRepair:
+                        start = len("Table \'./")
+                    if start:
                         dbfile = error_string[start:error_string.find("'", start)]
                         table = dbfile.rsplit('/', 1)[1].rsplit('.', 1)[0]
                         repair = "repair table " + table
