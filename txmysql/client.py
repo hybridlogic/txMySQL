@@ -121,6 +121,16 @@ class MySQLConnection(ReconnectingClientFactory):
     def runQuery(self, query, query_args=None):
         return self._handleIncomingRequest('query', self._doQuery, query, query_args)
 
+    def fetchone(self, query, query_args=None):
+        d = self.runQuery(query, query_args)
+        d.addCallback(self._fetchoneHandleResult)
+        return d
+
+    def _fetchoneHandleResult(self, result):
+        if result is not None:
+            result = result[0][0]
+        return result
+
     def runOperation(self, query, query_args=None):
         return self._handleIncomingRequest('operation', self._doOperation, query, query_args)
 
