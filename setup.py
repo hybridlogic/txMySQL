@@ -15,6 +15,7 @@ setup(name='txmysql',
       ],
       install_requires=[
           'setuptools',
+          'qbuf',
           ],
       zip_safe=False,
 )
