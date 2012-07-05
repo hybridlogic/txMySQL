@@ -268,8 +268,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             capabilities |= 1 << 3 # CLIENT_CONNECT_WITH_DB
         yield t.read(13)
         scramble_buf += yield t.read(12) # The last byte is a NUL
-	yield t.read_cstring()
-        yield t.read(1)
+	yield t.read_cstring() # Some extra data and the NUL byte.
 
         scramble_response = _xor(sha1(scramble_buf+sha1(sha1(self.password).digest()).digest()).digest(), sha1(self.password).digest())
 
