@@ -151,7 +151,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
                     ret['placeholders'] = yield self.read_fields()
                 ret['fields'] = yield self.read_fields()
             elif data_types is not None:
-                nulls = yield t.read((len(data_types) + 7) // 8)
+                nulls = yield t.read((len(data_types) + 9) // 8)
                 nulls = util.unpack_little_endian(nulls) >> 2
                 cols = []
                 for type in data_types:
@@ -267,6 +267,7 @@ class MySQLProtocol(MultiBufferer, TimeoutMixin):
             capabilities |= 1 << 3 # CLIENT_CONNECT_WITH_DB
         yield t.read(13)
         scramble_buf += yield t.read(12) # The last byte is a NUL
+	yield t.read_cstring()
         yield t.read(1)
 
         scramble_response = _xor(sha1(scramble_buf+sha1(sha1(self.password).digest()).digest()).digest(), sha1(self.password).digest())
