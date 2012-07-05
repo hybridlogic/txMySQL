@@ -1,3 +1,4 @@
+from __future__ import with_statement
 from twisted.internet import defer
 from twisted.protocols.policies import TimeoutMixin
 from twisted.python import log
