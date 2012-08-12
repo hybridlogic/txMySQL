@@ -14,7 +14,7 @@ def _escape(query, args=None): # XXX: Add Rob's suggestion for escaping
         return query
     escaped_args = []
     for arg in args:
-        escaped_args.append("'%s'" % str(arg).replace("'", "\\'"))
+        escaped_args.append("null" if arg is None else "'%s'" % str(arg).replace("'", "\\'"))
     parts = ("[%s]" % str(query)).split('%s') # Add square brackets to
                                               # guarantee that %s on the end or
                                               # beginning get a corresponding
