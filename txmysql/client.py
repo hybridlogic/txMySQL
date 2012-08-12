@@ -127,7 +127,7 @@ class MySQLConnection(ReconnectingClientFactory):
         return d
 
     def _fetchoneHandleResult(self, result):
-        if result is not None:
+        if result: # XXX used to assume it might be None, has been observed to be []
             result = result[0][0]
         return result
 
