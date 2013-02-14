@@ -122,6 +122,10 @@ class MySQLConnection(ReconnectingClientFactory):
         return self._handleIncomingRequest('query', self._doQuery, query, query_args)
 
     def fetchone(self, query, query_args=None):
+        # XXX DANGER WILL ROBINSON! DANGER!
+        # This method does not conform to PEP-249. It returns a single scalar
+        # value of the first result in the first row, or None. PEP-249 expects
+        # this method to return an entire row or None.
         d = self.runQuery(query, query_args)
         d.addCallback(self._fetchoneHandleResult)
         return d
