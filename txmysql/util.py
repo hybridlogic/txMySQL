@@ -42,10 +42,15 @@ class LengthTracker(object):
         self._check_length()
         return self.w.read(length)
 
+    def read_remain(self):
+        if self.length == self.tot_length:
+            return defer.succeed('')
+        return self.w.read(self.tot_length-self.length)
+
     @defer.inlineCallbacks
     def readline(self, delimiter=None):
         line = yield self.w.readline(delimiter)
-        self.length += len(line)
+        self.length += len(line)+1 # 1 is the length of delimiter
         self._check_length()
         defer.returnValue(line)
 

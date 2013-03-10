@@ -8,13 +8,13 @@ import pprint
 
 DEBUG = False
 
-def _escape(query, args=None): # XXX: Add Rob's suggestion for escaping
+def _escape(query, args=None, text_factory=str): # XXX: Add Rob's suggestion for escaping
     # TODO: Turn %% into % so that you can do a real %s
     if args is None:
         return query
     escaped_args = []
     for arg in args:
-        escaped_args.append("null" if arg is None else "'%s'" % str(arg).replace("'", "\\'"))
+        escaped_args.append("null" if arg is None else "'%s'" % text_factory(arg).replace("\\","\\\\").replace("'", "\\'"))
     parts = ("[%s]" % str(query)).split('%s') # Add square brackets to
                                               # guarantee that %s on the end or
                                               # beginning get a corresponding
@@ -70,7 +70,7 @@ class MySQLConnection(ReconnectingClientFactory):
     def __init__(self, hostname, username, password, database=None,
                  connect_timeout=None, query_timeout=None, idle_timeout=None,
                  retry_on_error=False, temporary_error_strings=[], port=3306,
-                 pool=None, autoRepair=False):
+                 pool=None, autoRepair=False, text_factory=str):
 
         self.hostname = hostname
         self.port = port
@@ -102,6 +102,7 @@ class MySQLConnection(ReconnectingClientFactory):
         # Set when we get disconnected, so that we know to attempt
         # a retry of a failed operation
         self._error_condition = False
+        self.text_factory=text_factory
 
     def _handleIncomingRequest(self, name, fn, arg0, arg1):
         """
@@ -407,11 +408,11 @@ class MySQLConnection(ReconnectingClientFactory):
     @defer.inlineCallbacks
     def _doQuery(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "Attempting an actual query \"%s\"" % _escape(query, query_args)
+            print "Attempting an actual query \"%s\"" % _escape(query, query_args,self.text_factory)
         yield self._begin()
         if DEBUG:
             print "Finished issuing query, fetching all results"
-        result = yield self.client.fetchall(_escape(query, query_args))
+        result = yield self.client.fetchall(_escape(query, query_args,self.text_factory))
         if DEBUG:
             print "Fetched %d results" % (len(result),)
         defer.returnValue(result)
@@ -419,9 +420,9 @@ class MySQLConnection(ReconnectingClientFactory):
     @defer.inlineCallbacks
     def _doOperation(self, query, query_args=None): # TODO query_args
         if DEBUG:
-            print "Attempting an actual operation \"%s\"" % _escape(query, query_args)
+            print "Attempting an actual operation \"%s\"" % _escape(query, query_args,self.text_factory)
         yield self._begin()
-        result = yield self.client.query(_escape(query, query_args))
+        result = yield self.client.query(_escape(query, query_args,self.text_factory))
         defer.returnValue(result)
 
     @defer.inlineCallbacks
