@@ -4,7 +4,7 @@ from setuptools import setup
 
 
 setup(name='txmysql',
-      version='0.4.0-hl0',
+      version='0.4.0-hl1',
       description='Twisted MySQL Protocol implementation',
       author='Hybrid Logic',
       author_email='luke@hybridlogic.co.uk',
@@ -14,7 +14,6 @@ setup(name='txmysql',
           'txmysql',
       ],
       install_requires=[
-          'setuptools',
           'qbuf',
           ],
       zip_safe=False,
